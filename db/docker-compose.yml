@@ -1,0 +1,13 @@
+version: '3'
+services:
+  postgres:
+    image: postgres
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      POSTGRES_USER: crawler_db
+      POSTGRES_PASSWORD: crawler_db
+      POSTGRES_DB: crawler_db
+    ports:
+      - "5432:5432"
+    container_name: crawler_db_docker
