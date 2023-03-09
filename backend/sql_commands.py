@@ -1,6 +1,7 @@
 import threading
 from psycopg2.pool import ThreadedConnectionPool
 
+# NOTE: This runs at import time, which is bad practice
 lock = threading.Lock()
 pool = ThreadedConnectionPool(1, 1000, host="localhost", user="crawler_db", password="crawler_db")
 
