@@ -1,6 +1,7 @@
 import asyncio
 import html.parser
 
+import requests
 
 async def print1(string: str):
     print(string)
@@ -38,3 +39,4 @@ class UrlParser(html.parser.HTMLParser):
 
 if __name__ == '__main__':
     #asyncio.run(main())
+    pass

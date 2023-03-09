@@ -1,5 +1,6 @@
 import asyncio
 import html.parser
+import requests
 
 
 class UrlParser(html.parser.HTMLParser):
@@ -38,6 +39,17 @@ class Crawler:
     def __init__(self, frontier) -> None:
         self.frontier = frontier
         
+    def request(self, url: str):
+        # Making a GET request
+        responce = requests.get(url)
+        
+        # check status code for 200
+        if responce.ok:
+            return responce.content
+        else:
+            # print(responce)
+            return None
+
 
     def worker(self):
         while True:
@@ -46,7 +58,7 @@ class Crawler:
             except asyncio.CancelledError:
                 return
 
-    def parse(self, url):
+    def parse(self, page):
         pass
 
     def crawl(self):
