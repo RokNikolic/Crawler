@@ -51,6 +51,7 @@ def request(url):
         robots_delay = domain_rules[domain].crawl_delay(USERAGENT)
         min_delay = robots_delay if robots_delay is not None else 5
         if since_last_req < min_delay:
+            add_to_frontier(url)
             return None
     else:
         # Save robots.txt rules for new domain
