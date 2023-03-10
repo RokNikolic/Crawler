@@ -1,9 +1,10 @@
-import queue
+import time
+import os
+from queue import Queue
+import threading
 import requests
 from urllib.parse import urljoin, urlparse
-import threading
-import time
-from queue import Queue
+from urllib.robotparser import RobotFileParser
 
 import bs4
 
@@ -14,6 +15,7 @@ from backend.sql_commands import DBManager
 
 
 # GLOBALS
+USERAGENT = "fri-wier-GROUP_NAME"
 frontier = Queue()      # urls to be visited
 crawled_urls = set()    # urls that have been visited
 domain_rules = {}       # robots.txt rules per visited domain
@@ -37,21 +39,28 @@ def request(url):
 
     # TODO: Don't request if outside given domains?
 
-    # TODO: Add correct robots.txt handling based on the current domain.
-    # Our User-Agent = fri-wier-GROUP_NAME
-
     # TODO: Add correct sitemap handling based on the current domain.
-
-    # TODO: Requests of all crawlers must be sent with 5 second delays (not only to one domain but also IP)
 
     domain = urlparse(url).netloc
 
-    # if not enough time has elapsed since last request, return url to end of queue
+    # If not enough time has elapsed since last request, return url to end of queue
     if domain in domain_ips:
         ip = domain_ips[domain]
         since_last_req = time.time() - ip_last_visits[ip]
-        if since_last_req < 5:
+
+        robots_delay = domain_rules[domain].crawl_delay(USERAGENT)
+        min_delay = robots_delay if robots_delay is not None else 5
+        if since_last_req < min_delay:
             return None
+    else:
+        # Save robots.txt rules for new domain
+        rp = RobotFileParser()
+        rp.set_url(urljoin(url, domain) + "/robots.txt")
+        rp.read()
+        domain_rules[domain] = rp
+
+    if not domain_rules[domain].can_fetch(USERAGENT, url):
+        return
         
     # Make a GET request
     print("Fetching ", url)
