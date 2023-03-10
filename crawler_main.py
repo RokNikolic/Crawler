@@ -1,24 +1,29 @@
 import queue
-
 import requests
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 import threading
 import time
-import bs4
 from queue import Queue
-from backend import DBManager
 
-# TODO: Initial seed is gov.si, evem.gov.si, e-uprava.gov.si and e-prostor.gov.si
+import bs4
+
+from backend.sql_commands import DBManager
+
+
 # TODO: Add site domains for each seed into DB
 
 
-frontier = Queue()
-crawled_urls = set()
+# GLOBALS
+frontier = Queue()      # urls to be visited
+crawled_urls = set()    # urls that have been visited
+domain_rules = {}       # robots.txt rules per visited domain
+domain_ips = {}         # domain to ip address map
+ip_last_visits = {}     # time of last visit per ip (to restrict request rate)
 
 
 def get_url_from_frontier():
     url = frontier.get()
-    crawled_urls.add(url)
+    crawled_urls.add(url) # TODO: Do this on successful request instead?
     return url
 
 
@@ -30,6 +35,8 @@ def add_to_frontier(url):
 def request(url):
     """Fetches page at url and returns HTML content."""
 
+    # TODO: Don't request if outside given domains?
+
     # TODO: Add correct robots.txt handling based on the current domain.
     # Our User-Agent = fri-wier-GROUP_NAME
 
@@ -37,12 +44,28 @@ def request(url):
 
     # TODO: Requests of all crawlers must be sent with 5 second delays (not only to one domain but also IP)
 
-    # Make a GET request
-    response = requests.get(url)
+    domain = urlparse(url).netloc
 
-    # Check status code for 200
-    if response.ok:
-        # TODO: Account for cases when status code OK but empty or incorrect page returned (example 404 page)
+    # if not enough time has elapsed since last request, return url to end of queue
+    if domain in domain_ips:
+        ip = domain_ips[domain]
+        since_last_req = time.time() - ip_last_visits[ip]
+        if since_last_req < 5:
+            return None
+        
+    # Make a GET request
+    print("Fetching ", url)
+    req_time = time.time()
+    response = requests.get(url, stream=True)
+
+    # Save server IP and request time
+    ip = response.raw._connection.sock.getsockname()
+    if domain not in domain_ips:
+        domain_ips[domain] = ip
+    ip_last_visits[ip] = req_time
+
+    # Check response validity
+    if response.ok and len(response.content) > 0:
         return response.text
     else:
         return None
@@ -50,24 +73,22 @@ def request(url):
     # TODO: Perform Selenium parsing if we suspect dynamic content.
 
 
-def parse(page, base_url):
+def parse(html, base_url):
     """Parses HTML content and extract links (urls)."""
 
     # TODO: Detect duplicate pages based on content or hash.
 
     # TODO: If URL already parsed we must still add the link connection to DB.
 
-    if page is None:
-        return None
-    # Parse HTML and extract links
-    soup = bs4.BeautifulSoup(page, 'html.parser')
+    if html is None: return None
 
+    # Parse HTML and extract links
+    soup = bs4.BeautifulSoup(html, 'html.parser')
+
+    # Find the urls in page
     links = []
-    # Find the 'a' tag
     for link in soup.select('a'):
-        # Find the 'href' tag
         found_link = link.get('href')
-        # Combine found links and base path
         links.append(urljoin(base_url, found_link))
 
     # TODO: Also include links from onclick events
@@ -80,12 +101,14 @@ def parse(page, base_url):
 def save(data, url, conn):
     """Saves parsed page content to DB."""
 
+    if data is None: return
+
     for link in data:
-        # print("Adding " + link + " to frontier...")
         add_to_frontier(link)
 
     site_json = {"domain": url}
     DBManager.insert_site(conn, site_json)
+    # THROWS: "robots" ?
 
     # TODO: insert parsed data 
 
@@ -123,10 +146,16 @@ class Crawler(threading.Thread):
 
 if __name__ == '__main__':
 
-    test_url = 'https://en.wikipedia.org/wiki/Main_Page'
-    add_to_frontier(test_url)
+    add_to_frontier("https://gov.si")
+    add_to_frontier("https://evem.gov.si")
+    add_to_frontier("https://e-uprava.gov.si")
+    add_to_frontier("https://e-prostor.gov.si")
 
-    NTHREADS = 3
+    # Init base domains
+    for url in frontier.queue:
+        domain_rules[url] = None
+
+    NTHREADS = 2
 
     db_manager = DBManager()
 
@@ -142,4 +171,5 @@ if __name__ == '__main__':
         except Exception as e:
             print(e)
             print(frontier)
+            print(ip_last_visits)
             exit()
