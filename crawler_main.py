@@ -6,7 +6,6 @@ import requests
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 import traceback
-
 import bs4
 
 from backend.sql_commands import DBManager
@@ -26,13 +25,16 @@ ip_last_visits = {}     # time of last visit per ip (to restrict request rate)
 
 def get_url_from_frontier():
     url = frontier.get()
-    crawled_urls.add(url) # TODO: Do this on successful request instead?
     return url
 
 
 def add_to_frontier(url):
-    if not url in crawled_urls:
+    if url not in crawled_urls:
         frontier.put(url)
+
+
+def add_to_crawled_urls(url):
+    crawled_urls.add(url)
 
 
 def request_page(url):
@@ -53,7 +55,7 @@ def request_page(url):
         if since_last_req < min_delay:
             add_to_frontier(url)
             return None, None
-        
+
     else:
         # Save robots.txt rules for new domain
         rp = RobotFileParser()
@@ -78,7 +80,7 @@ def request_page(url):
     # If URL is dissalowed by robots.txt, don't fetch
     if not domain_rules[domain].can_fetch(USERAGENT, url):
         return None, site_data
-        
+
     # Make a GET request
     print("Fetching ", url)
     req_time = time.time()
@@ -92,7 +94,10 @@ def request_page(url):
         ip_last_visits[ip] = req_time
 
     # Make raw page content and info dict 
-    if response.ok and len(response.content) > 0:
+    if response.ok and response.content:
+        # Push url to crawled list
+        add_to_crawled_urls(url)
+
         # TODO: Set HTML, BINARY or DUPLICATE but default can be HTML
         page_raw = {
             "html_content": response.text,
@@ -115,14 +120,15 @@ def parse_page(page_raw, base_url):
 
     # TODO: If URL already parsed we must still add the link connection to DB.
 
-    if page_raw is None: return None
+    if page_raw is None:
+        return None
 
     # Parse HTML and extract links
     soup = bs4.BeautifulSoup(page_raw["html_content"], 'html.parser')
 
     # Basic page info
     page_info = page_raw
-    
+
     # Find the urls in page
     links = []
     for link in soup.select('a'):
@@ -131,19 +137,19 @@ def parse_page(page_raw, base_url):
         links.append({"from_page": base_url, "to_page": to})
 
     # Find the images in page (<img> tags)
-    imgs = []
+    images = []
     for img in soup.select('img'):
-        src = img.get('src')
-        if src is not None:
-            src_full = urljoin(base_url, src)
+        found_src = img.get('src')
+        if found_src is not None:
+            src_full = urljoin(base_url, found_src)
             img_info = {
                 "page_url": base_url,
                 "filename": os.path.basename(src_full),
                 "content_type": None, # TODO: ?
                 "data": None,
                 "accessed_time": None
-            } 
-            imgs.append(img_info)
+            }
+            images.append(img_info)
 
     # TODO: Page data?
 
@@ -152,7 +158,7 @@ def parse_page(page_raw, base_url):
     page_obj = {
         "info": page_info,
         "urls": links,
-        "imgs": imgs
+        "imgs": images
     }
 
     return page_obj
@@ -208,8 +214,8 @@ if __name__ == '__main__':
     add_to_frontier("https://e-prostor.gov.si")
 
     # Init base domains
-    for url in frontier.queue:
-        domain_rules[url] = None
+    for page_url in frontier.queue:
+        domain_rules[page_url] = None
 
     NTHREADS = 1
 
