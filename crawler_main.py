@@ -93,10 +93,13 @@ def request_page(url):
 
     # Make raw page content and info dict 
     if response.ok and len(response.content) > 0:
+        # TODO: Set HTML, BINARY or DUPLICATE but default can be HTML
         page_raw = {
             "html_content": response.text,
+            "page_type_code": "HTML",
             "domain": domain,
             "url": url,
+            "http_status_code": 200,
             "accessed_time": req_time
         }
 
@@ -119,7 +122,6 @@ def parse_page(page_raw, base_url):
 
     # Basic page info
     page_info = page_raw
-    page_info["page_type_code"] = None # TODO
     
     # Find the urls in page
     links = []
@@ -135,6 +137,7 @@ def parse_page(page_raw, base_url):
         if src is not None:
             src_full = urljoin(base_url, src)
             img_info = {
+                "page_url": base_url,
                 "filename": os.path.basename(src_full),
                 "content_type": None, # TODO: ?
                 "data": None,
@@ -146,28 +149,26 @@ def parse_page(page_raw, base_url):
 
     # TODO: Also include links from onclick events
 
-    page_data = {
+    page_obj = {
         "info": page_info,
         "urls": links,
         "imgs": imgs
     }
 
-    return page_data
+    return page_obj
 
 
-def save_to_db(page_data, site_data, conn):
+def save_to_db(page_obj, site_data, conn):
     """Saves parsed site and page data to DB."""
 
     if site_data is not None:
         DBManager.insert_site(conn, site_data)
 
-    if page_data is not None:
+    if page_obj is not None:
         # Add found urls to frontier (TODO: should this be here?)
-        for url in page_data["urls"]:
+        for url in page_obj["urls"]:
             add_to_frontier(url["to_page"])
-        # TODO: Should implement something like:
-        # DBManager.insert_page_all(conn, info, urls, imgs)
-        pass
+        DBManager.insert_all(conn, page_obj['info'], page_obj['urls'], page_obj['imgs'])
 
 
 class Crawler(threading.Thread):
@@ -185,8 +186,8 @@ class Crawler(threading.Thread):
 
         url = get_url_from_frontier()
         page_raw, site_data = request_page(url)
-        page_data = parse_page(page_raw, url)
-        save_to_db(page_data, site_data, self.conn)
+        page_obj = parse_page(page_raw, url)
+        save_to_db(page_obj, site_data, self.conn)
 
     def run(self):
         """Continuously processes pages from frontier."""
