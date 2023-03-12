@@ -27,7 +27,9 @@ class DBManager:
         :return: connection
         """
         try:
-            return self.pool.getconn()
+            connection = self.pool.getconn()
+            connection.autocommit = True
+            return connection
         except psycopg2.Error:
             print(f"Trouble returning a connection to threaded pool.")
             return None
@@ -36,7 +38,7 @@ class DBManager:
     def get_page(conn, url):
         cur = conn.cursor()
         cur.execute("SELECT * FROM crawldb.page WHERE url = %s;", (url,))
-        rows = cur.fetchall()
+        rows = cur.fetchone()
         return rows
 
     @staticmethod
@@ -76,7 +78,6 @@ class DBManager:
                 VALUES (%s, %s, %s)
                 RETURNING id;
                 """, (site_json['domain'], site_json['robots'], site_json['sitemap']))
-                conn.commit()
                 site_id = cur.fetchone()
                 return site_id[0]
             else:
@@ -85,31 +86,33 @@ class DBManager:
     def insert_page(conn, page_json):
         """ Inserts Page into DB and returns page_id. """
         with DBManager.lock:
-            page = DBManager.get_page(conn, page_json['url'])
-            cur = conn.cursor()
+            DBManager.insert_page_without_lock(conn, page_json)
 
-            if len(page) == 0:
-                cur.execute("""
-                INSERT INTO crawldb.page (site_id, page_type_code, url, html_content, http_status_code, accessed_time)
-                VALUES (
-                    (SELECT id FROM crawldb.site WHERE "domain" = %s), %s, %s, %s, %s, to_timestamp(%s));
-                """, (page_json['domain'], page_json['page_type_code'], page_json['url'], page_json['html_content'],
-                      page_json['http_status_code'], page_json['accessed_time']))
-            else:
-                cur.execute("""
-                UPDATE crawldb.page
-                SET 
-                    site_id = (SELECT id FROM crawldb.site WHERE "domain" = %s),
-                    page_type_code = %s,
-                    html_content = %s,
-                    http_status_code = %s,
-                    accessed_time = to_timestamp(%s)
-                WHERE url = %s
-                """, (page_json['domain'], page_json['page_type_code'], page_json['html_content'],
-                      page_json['http_status_code'], page_json['accessed_time'], page_json['url']))
-            conn.commit()
-            print(f"Finished Page insert for {page_json['url']}")
+    @staticmethod
+    def insert_page_without_lock(conn, page_json):
+        page = DBManager.get_page(conn, page_json['url'])
+        cur = conn.cursor()
 
+        if page is None:
+            cur.execute("""
+            INSERT INTO crawldb.page (site_id, page_type_code, url, html_content, http_status_code, accessed_time)
+            VALUES (
+                (SELECT id FROM crawldb.site WHERE "domain" = %s), %s, %s, %s, %s, to_timestamp(%s));
+            """, (page_json['domain'], page_json['page_type_code'], page_json['url'], page_json['html_content'],
+                  page_json['http_status_code'], page_json['accessed_time']))
+        else:
+            cur.execute("""
+            UPDATE crawldb.page
+            SET 
+                site_id = (SELECT id FROM crawldb.site WHERE "domain" = %s),
+                page_type_code = %s,
+                html_content = %s,
+                http_status_code = %s,
+                accessed_time = to_timestamp(%s)
+            WHERE url = %s
+            """, (page_json['domain'], page_json['page_type_code'], page_json['html_content'],
+                  page_json['http_status_code'], page_json['accessed_time'], page_json['url']))
+        print(f"Finished Page insert for {page_json['url']}")
 
     @staticmethod
     def insert_image(conn, image_json):
@@ -124,7 +127,6 @@ class DBManager:
                 %s, %s, %s, %s);
             """, (image_json['page_url'], image_json['filename'], image_json['content_type'], image_json['data'],
                   image_json['accessed_time']))
-            conn.commit()
 
     @staticmethod
     def insert_page_data(conn, page_data_json):
@@ -141,13 +143,12 @@ class DBManager:
     def insert_link(conn, link_json):
         """ Inserts Link into DB. """
         with DBManager.lock:
-            cur = conn.cursor()
 
             # First we must check that both pages exist
             page_from = DBManager.get_page(conn, link_json['from_page'])
             page_to = DBManager.get_page(conn, link_json['to_page'])
 
-            if len(page_to) == 0:
+            if page_to is None:
                 page_raw = {
                     "html_content": None,
                     "page_type_code": None,
@@ -156,20 +157,21 @@ class DBManager:
                     "http_status_code": None,
                     "accessed_time": None
                 }
-                DBManager.insert_page(conn, page_raw)
+                DBManager.insert_page_without_lock(conn, page_raw)
             page_to = DBManager.get_page(conn, link_json['to_page'])
-            print(f"From {page_from['url']} To {page_to}")
+            print(f"From {page_from[3]} To {page_to[3]}")
 
             # If page from and to point to same page
+            cur = conn.cursor()
             cur.execute("""
             -- Insert a new link
             INSERT INTO crawldb.link (from_page, to_page)
             VALUES (
                 (SELECT id FROM crawldb.page WHERE url = %s),
                 (SELECT id FROM crawldb.page WHERE url = %s)
-            );
+            )
+            ON CONFLICT DO NOTHING;
             """, (link_json['from_page'], link_json['to_page']))
-            conn.commit()
 
     @staticmethod
     def insert_all(conn, page_info, urls, imgs):
