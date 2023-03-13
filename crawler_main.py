@@ -21,6 +21,8 @@ crawled_urls = set()    # urls that have been visited
 domain_rules = {}       # robots.txt rules per visited domain
 domain_ips = {}         # domain to ip address map
 ip_last_visits = {}     # time of last visit per ip (to restrict request rate)
+# list of domains we want to visit
+visit_domains = ["https://gov.si", "https://evem.gov.si", "https://e-uprava.gov.si", "https://e-prostor.gov.si"]
 
 
 def get_url_from_frontier():
@@ -29,8 +31,12 @@ def get_url_from_frontier():
 
 
 def add_to_frontier(url):
+    # Checks if url has already been crawled
     if url not in crawled_urls:
-        frontier.put(url)
+        # Checks if url fits into our domain constraints
+        for domain in visit_domains:
+            if domain in url:
+                frontier.put(url)
 
 
 def add_to_crawled_urls(url):
@@ -39,8 +45,6 @@ def add_to_crawled_urls(url):
 
 def request_page(url):
     """Fetches page at url and returns HTML content and metadata as dict."""
-
-    # TODO: Don't request if outside given domains?
 
     domain = urlparse(url).netloc
     site_data = None    # Parsed SITE metadata
@@ -208,10 +212,9 @@ class Crawler(threading.Thread):
 
 if __name__ == '__main__':
 
-    add_to_frontier("https://gov.si")
-    add_to_frontier("https://evem.gov.si")
-    add_to_frontier("https://e-uprava.gov.si")
-    add_to_frontier("https://e-prostor.gov.si")
+    # Add seed urls of domains we want to visit
+    for domain_url in visit_domains:
+        add_to_frontier(domain_url)
 
     # Init base domains
     for page_url in frontier.queue:
