@@ -1,7 +1,8 @@
+import datetime
 import threading
 
 import psycopg2
-from psycopg2.pool import PoolError, ThreadedConnectionPool
+from psycopg2.pool import ThreadedConnectionPool
 
 
 # NOTE: This runs at import time, which is bad practice
@@ -17,7 +18,7 @@ class DBManager:
     def __init__(self):
         try:
             self.pool = ThreadedConnectionPool(1, 1000, host="localhost", user="crawler_db", password="crawler_db")
-        except PoolError | ConnectionError:
+        except Exception as e:
             print(f"Failed to establish connection to database")
             exit(-1)
 
@@ -63,6 +64,17 @@ class DBManager:
         return rows
 
     @staticmethod
+    def check_if_page_exists(conn, hashcode):
+        """Returns True if there exists a page with the same hashcode."""
+        cur = conn.cursor()
+        cur.execute(f"""SELECT EXISTS(
+            SELECT 1 from crawldb.page
+            WHERE hashcode = %s
+        );""", (hashcode,))
+        out = cur.fetchone()
+        return out[0]
+
+    @staticmethod
     def insert_site(conn, site_json):
         """ Inserts Site into DB and returns site_id. """
         with DBManager.lock:
@@ -82,6 +94,7 @@ class DBManager:
                 return site_id[0]
             else:
                 return site[0]
+
     @staticmethod
     def insert_page(conn, page_json):
         """ Inserts Page into DB and returns page_id. """
@@ -95,24 +108,28 @@ class DBManager:
 
         if page is None:
             cur.execute("""
-            INSERT INTO crawldb.page (site_id, page_type_code, url, html_content, http_status_code, accessed_time)
+            INSERT INTO crawldb.page (site_id, page_type_code, url, html_content, hashcode, http_status_code, accessed_time)
             VALUES (
-                (SELECT id FROM crawldb.site WHERE "domain" = %s), %s, %s, %s, %s, to_timestamp(%s));
+                (SELECT id FROM crawldb.site WHERE "domain" = %s), %s, %s, %s, %s, %s, to_timestamp(%s));
             """, (page_json['domain'], page_json['page_type_code'], page_json['url'], page_json['html_content'],
-                  page_json['http_status_code'], page_json['accessed_time']))
-        else:
+                  page_json['hashcode'], page_json['http_status_code'], page_json['accessed_time']))
+        elif page[4] is None:
             cur.execute("""
             UPDATE crawldb.page
             SET 
                 site_id = (SELECT id FROM crawldb.site WHERE "domain" = %s),
                 page_type_code = %s,
                 html_content = %s,
+                hashcode = %s,
                 http_status_code = %s,
                 accessed_time = to_timestamp(%s)
             WHERE url = %s
-            """, (page_json['domain'], page_json['page_type_code'], page_json['html_content'],
+            """, (page_json['domain'], page_json['page_type_code'], page_json['html_content'], page_json['hashcode'],
                   page_json['http_status_code'], page_json['accessed_time'], page_json['url']))
-        print(f"Finished Page insert for {page_json['url']}")
+            print(f"{datetime.datetime.now()} Finished Page insert for {page_json['url']}")
+        else:
+            print(f"{datetime.datetime.now()} Page already exists and filled.")
+
 
     @staticmethod
     def insert_image(conn, image_json):
@@ -143,7 +160,6 @@ class DBManager:
     def insert_link(conn, link_json):
         """ Inserts Link into DB. """
         with DBManager.lock:
-
             # First we must check that both pages exist
             page_from = DBManager.get_page(conn, link_json['from_page'])
             page_to = DBManager.get_page(conn, link_json['to_page'])
@@ -151,6 +167,7 @@ class DBManager:
             if page_to is None:
                 page_raw = {
                     "html_content": None,
+                    "hashcode": None,
                     "page_type_code": None,
                     "domain": None,
                     "url": link_json['to_page'],
@@ -159,7 +176,7 @@ class DBManager:
                 }
                 DBManager.insert_page_without_lock(conn, page_raw)
             page_to = DBManager.get_page(conn, link_json['to_page'])
-            print(f"From {page_from[3]} To {page_to[3]}")
+            # print(f"From {page_from[3]} To {page_to[3]}")
 
             # If page from and to point to same page
             cur = conn.cursor()

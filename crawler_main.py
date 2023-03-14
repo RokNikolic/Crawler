@@ -1,12 +1,17 @@
+import datetime
+import re
+import socket
 import time
 import os
-from queue import Queue
-import threading
-import requests
-from urllib.parse import urljoin, urlparse
-from urllib.robotparser import RobotFileParser
 import traceback
 import bs4
+import threading
+import requests
+import hashlib
+from queue import Queue
+from urllib.parse import urljoin, urlparse
+from urllib.robotparser import RobotFileParser
+
 
 from backend.sql_commands import DBManager
 
@@ -25,22 +30,43 @@ ip_last_visits = {}     # time of last visit per ip (to restrict request rate)
 visit_domains = ["https://gov.si", "https://evem.gov.si", "https://e-uprava.gov.si", "https://e-prostor.gov.si"]
 
 
+def get_hash(page_content):
+    """Returns hash from the given HTML content."""
+    encoded_content = page_content.encode('utf-8')
+    hashcode = hashlib.sha256(encoded_content).hexdigest()
+    if page_content is None:
+        print('WHY IS NONE')
+        exit(-1)
+    return hashcode
+
+
+def check_duplicate(conn, page_content):
+    """Check if page is a duplicate of another."""
+    page_hash = get_hash(page_content)
+    t = DBManager.check_if_page_exists(conn, page_hash)
+    return t
+
+
 def get_url_from_frontier():
     url = frontier.get()
     return url
 
 
+def add_urls_to_frontier(links):
+    for link in links:
+        add_to_frontier(link['to_page'])
+
+
 def add_to_frontier(url):
-    # Checks if url has already been crawled
-    if url not in crawled_urls:
+    # Removes query elements and anchor elements from url
+    clean_url = re.sub(r"(\?|#).*$", "", url)
+    if clean_url not in crawled_urls:
         # Checks if url fits into our domain constraints
         for domain in visit_domains:
-            if domain in url:
-                frontier.put(url)
-
-
-def add_to_crawled_urls(url):
-    crawled_urls.add(url)
+            if domain in clean_url:
+                frontier.put(clean_url)
+                return True
+    return False
 
 
 def request_page(url):
@@ -86,25 +112,27 @@ def request_page(url):
         return None, site_data
 
     # Make a GET request
-    print("Fetching ", url)
+    print(f"{datetime.datetime.now()} Fetching {url}")
     req_time = time.time()
     response = requests.get(url, stream=True)
 
     # Save server IP and request time
-    if response.raw._connection.sock: # HACK
-        ip = response.raw._connection.sock.getsockname()
+    if socket.gethostbyname(domain):
+        ip = socket.gethostbyname(domain)
         if domain not in domain_ips:
             domain_ips[domain] = ip
         ip_last_visits[ip] = req_time
 
-    # Make raw page content and info dict 
-    if response.ok and response.content:
-        # Push url to crawled list
-        add_to_crawled_urls(url)
+    # TODO: Set HTML, BINARY or DUPLICATE but default can be HTML
 
-        # TODO: Set HTML, BINARY or DUPLICATE but default can be HTML
+    # Make raw page content and info dict 
+    if response.ok and response.content and "text/html" in response.headers["content-type"]:
+        # Push url to crawled list
+        crawled_urls.add(url)
+
         page_raw = {
             "html_content": response.text,
+            "hashcode": get_hash(response.text),
             "page_type_code": "HTML",
             "domain": domain,
             "url": url,
@@ -117,50 +145,50 @@ def request_page(url):
     return page_raw, site_data
 
 
-def parse_page(page_raw, base_url):
+def parse_page(page_raw, base_url, conn):
     """Parses HTML content and extract links (urls)."""
-
-    # TODO: Detect duplicate pages based on content or hash.
-
-    # TODO: If URL already parsed we must still add the link connection to DB.
 
     if page_raw is None:
         return None
 
-    # Parse HTML and extract links
-    soup = bs4.BeautifulSoup(page_raw["html_content"], 'html.parser')
-
-    # Basic page info
-    page_info = page_raw
-
-    # Find the urls in page
     links = []
-    for link in soup.select('a'):
-        found_link = link.get('href')
-        to = urljoin(base_url, found_link)
-        links.append({"from_page": base_url, "to_page": to})
-
-    # Find the images in page (<img> tags)
     images = []
-    for img in soup.select('img'):
-        found_src = img.get('src')
-        if found_src is not None:
-            src_full = urljoin(base_url, found_src)
-            img_info = {
-                "page_url": base_url,
-                "filename": os.path.basename(src_full),
-                "content_type": None, # TODO: ?
-                "data": None,
-                "accessed_time": None
-            }
-            images.append(img_info)
+
+    if check_duplicate(conn, page_raw['html_content']):
+        page_raw['page_type_code'] = 'DUPLICATE'
+        print(f"{datetime.datetime.now()} Duplicate {base_url} found")
+    else:
+
+        # Parse HTML and extract links
+        soup = bs4.BeautifulSoup(page_raw["html_content"], 'html.parser')
+
+        # Find the urls in page
+        for link in soup.select('a'):
+            found_link = link.get('href')
+            to = urljoin(base_url, found_link)
+            clean_to = re.sub(r"(\?).*$", "", to)
+            links.append({"from_page": base_url, "to_page": clean_to})
+
+        # Find the images in page (<img> tags)
+        for img in soup.select('img'):
+            found_src = img.get('src')
+            if found_src is not None:
+                src_full = urljoin(base_url, found_src)
+                img_info = {
+                    "page_url": base_url,
+                    "filename": os.path.basename(src_full),
+                    "content_type": None, # TODO: ?
+                    "data": None,
+                    "accessed_time": None
+                }
+                images.append(img_info)
 
     # TODO: Page data?
 
     # TODO: Also include links from onclick events
 
     page_obj = {
-        "info": page_info,
+        "info": page_raw,
         "urls": links,
         "imgs": images
     }
@@ -175,9 +203,8 @@ def save_to_db(page_obj, site_data, conn):
         DBManager.insert_site(conn, site_data)
 
     if page_obj is not None:
-        # Add found urls to frontier (TODO: should this be here?)
-        for url in page_obj["urls"]:
-            add_to_frontier(url["to_page"])
+        if page_obj['info']['page_type_code'] != 'DUPLICATE':
+            add_urls_to_frontier(page_obj['urls'])
         DBManager.insert_all(conn, page_obj['info'], page_obj['urls'], page_obj['imgs'])
 
 
@@ -196,7 +223,7 @@ class Crawler(threading.Thread):
 
         url = get_url_from_frontier()
         page_raw, site_data = request_page(url)
-        page_obj = parse_page(page_raw, url)
+        page_obj = parse_page(page_raw, url, self.conn)
         save_to_db(page_obj, site_data, self.conn)
 
     def run(self):
@@ -211,6 +238,7 @@ class Crawler(threading.Thread):
 
 
 if __name__ == '__main__':
+    print(f"Start Time: {time.time()}")
 
     # Add seed urls of domains we want to visit
     for domain_url in visit_domains:
