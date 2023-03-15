@@ -4,15 +4,15 @@ import socket
 import time
 import os
 import traceback
-import bs4
+from bs4 import BeautifulSoup
 import threading
 import requests
 import hashlib
 from queue import Queue
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
-
-
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from backend.sql_commands import DBManager
 
 
@@ -28,6 +28,14 @@ domain_ips = {}         # domain to ip address map
 ip_last_visits = {}     # time of last visit per ip (to restrict request rate)
 # list of domains we want to visit
 visit_domains = ["https://gov.si", "https://evem.gov.si", "https://e-uprava.gov.si", "https://e-prostor.gov.si"]
+
+# Options for the selenium browser
+option = webdriver.ChromeOptions()
+option.add_argument('--headless')
+
+# Get and create the selenium browser object
+service = Service(r'\web_driver\chromedriver.exe')
+browser = webdriver.Chrome(service=service, options=option)
 
 
 def get_hash(page_content):
@@ -160,7 +168,7 @@ def parse_page(page_raw, base_url, conn):
     else:
 
         # Parse HTML and extract links
-        soup = bs4.BeautifulSoup(page_raw["html_content"], 'html.parser')
+        soup = BeautifulSoup(page_raw["html_content"], 'html.parser')
 
         # Find the urls in page
         for link in soup.select('a'):
@@ -194,6 +202,13 @@ def parse_page(page_raw, base_url, conn):
     }
 
     return page_obj
+
+
+def load_with_selenium(url):
+    # Load the page with our browser, loads javascript
+    browser.get(url)
+    # TODO: call our regular parser? idk
+    # soup = BeautifulSoup(browser.page_source, 'html.parser')
 
 
 def save_to_db(page_obj, site_data, conn):
