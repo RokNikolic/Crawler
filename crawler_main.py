@@ -148,7 +148,9 @@ def request_page(url):
             "accessed_time": req_time
         }
 
-    # TODO: Perform Selenium parsing if we suspect dynamic content.
+    # TODO: Add logic for when we perform selenium request.
+    # selenium_response = request_with_selenium(url)
+    # page_raw["html_content"] = selenium_response
 
     return page_raw, site_data
 
@@ -185,7 +187,7 @@ def parse_page(page_raw, base_url, conn):
                 img_info = {
                     "page_url": base_url,
                     "filename": os.path.basename(src_full),
-                    "content_type": None, # TODO: ?
+                    "content_type": None,  # TODO: ?
                     "data": None,
                     "accessed_time": None
                 }
@@ -204,11 +206,12 @@ def parse_page(page_raw, base_url, conn):
     return page_obj
 
 
-def load_with_selenium(url):
-    # Load the page with our browser, loads javascript
+def request_with_selenium(url):
+    """Loads a page with a full web browser to parse javascript"""
+
     browser.get(url)
-    # TODO: call our regular parser? idk
-    # soup = BeautifulSoup(browser.page_source, 'html.parser')
+    page = browser.page_source
+    return page
 
 
 def save_to_db(page_obj, site_data, conn):
@@ -248,7 +251,8 @@ class Crawler(threading.Thread):
             try:
                 self.process_next()
             except Exception as e:
-                print(traceback.format_exc())
+                print(e, traceback.format_exc())
+                continue
                 # TODO
 
 
