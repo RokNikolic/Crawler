@@ -64,13 +64,13 @@ class DBManager:
         return rows
 
     @staticmethod
-    def check_if_page_exists(conn, hashcode):
-        """Returns True if there exists a page with the same hashcode."""
+    def check_if_page_exists(conn, hashcode, url):
+        """Returns True if there exists a page with the same hashcode but different url."""
         cur = conn.cursor()
         cur.execute(f"""SELECT EXISTS(
             SELECT 1 from crawldb.page
-            WHERE hashcode = %s
-        );""", (hashcode,))
+            WHERE hashcode = %s AND url != %s
+        );""", (hashcode, url))
         out = cur.fetchone()
         return out[0]
 

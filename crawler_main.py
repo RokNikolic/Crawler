@@ -42,16 +42,13 @@ def get_hash(page_content):
     """Returns hash from the given HTML content."""
     encoded_content = page_content.encode('utf-8')
     hashcode = hashlib.sha256(encoded_content).hexdigest()
-    if page_content is None:
-        print('WHY IS NONE')
-        exit(-1)
     return hashcode
 
 
-def check_duplicate(conn, page_content):
+def check_duplicate(conn, page_content, url):
     """Check if page is a duplicate of another."""
     page_hash = get_hash(page_content)
-    t = DBManager.check_if_page_exists(conn, page_hash)
+    t = DBManager.check_if_page_exists(conn, page_hash, url)
     return t
 
 
@@ -67,7 +64,7 @@ def add_urls_to_frontier(links):
 
 def add_to_frontier(url):
     # Removes query elements and anchor elements from url
-    clean_url = re.sub(r"(\?|#).*$", "", url)
+    clean_url = re.sub(r"/*([?#].*)?$", "", url)
     if clean_url not in crawled_urls:
         # Checks if url fits into our domain constraints
         for domain in visit_domains:
@@ -82,7 +79,15 @@ def request_page(url):
 
     domain = urlparse(url).netloc
     site_data = None    # Parsed SITE metadata
-    page_raw = None     # Raw PAGE content and metadata
+    page_raw = {
+        "html_content": "",
+        "hashcode": "",
+        "page_type_code": "",
+        "domain": domain,
+        "url": url,
+        "http_status_code": 0,
+        "accessed_time": 0
+    }        # Raw PAGE content and metadata
 
     # If not enough time has elapsed since last request, return url to end of queue
     if domain in domain_ips:
@@ -119,6 +124,10 @@ def request_page(url):
     if not domain_rules[domain].can_fetch(USERAGENT, url):
         return None, site_data
 
+    # If URL does not contain gov.si don't fetch
+    if "gov.si" not in url:
+        return None, site_data
+
     # Make a GET request
     print(f"{datetime.datetime.now()} Fetching {url}")
     req_time = time.time()
@@ -131,26 +140,33 @@ def request_page(url):
             domain_ips[domain] = ip
         ip_last_visits[ip] = req_time
 
-    # TODO: Set HTML, BINARY or DUPLICATE but default can be HTML
+    page_raw["accessed_time"] = req_time
+    page_raw["http_status_code"] = response.status_code
 
-    # Make raw page content and info dict 
-    if response.ok and response.content and "text/html" in response.headers["content-type"]:
-        # Push url to crawled list
-        crawled_urls.add(url)
-
-        page_raw = {
-            "html_content": response.text,
-            "hashcode": get_hash(response.text),
-            "page_type_code": "HTML",
-            "domain": domain,
-            "url": url,
-            "http_status_code": 200,
-            "accessed_time": req_time
-        }
-
-    # TODO: Add logic for when we perform selenium request.
-    # selenium_response = request_with_selenium(url)
-    # page_raw["html_content"] = selenium_response
+    # Check if we got redirected and if we already crawled the redirect url
+    if response.history and response.url != url and response.url in crawled_urls:
+        if response.url in crawled_urls:
+            print("Already crawled redirect url")
+            page_raw["page_type_code"] = "DUPLICATE"
+    elif response.ok and response.content and "text/html" in response.headers["content-type"]:
+        page_raw['html_content'] = response.text
+        # Check if we need to use selenium
+        if len(response.text) < 1000:
+            print(f"Using selenium")
+            # Use selenium
+            selenium_response = request_with_selenium(url)
+            page_raw['html_content'] = selenium_response
+        page_raw["page_type_code"] = "HTML"
+        page_raw["hashcode"] = get_hash(page_raw["html_content"])
+        crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
+    elif response.ok and response.content:
+        page_raw["page_type_code"] = "BINARY"
+        crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
+    else:
+        print("Response not ok")
+        # If response is not ok, return url to end of queue
+        add_to_frontier(url)
+        return None, site_data
 
     return page_raw, site_data
 
@@ -158,50 +174,45 @@ def request_page(url):
 def parse_page(page_raw, base_url, conn):
     """Parses HTML content and extract links (urls)."""
 
+    page_obj = {
+        "info": page_raw,
+        "urls": [],
+        "imgs": []
+    }
+
     if page_raw is None:
         return None
+    elif page_raw['page_type_code'] == 'DUPLICATE' or check_duplicate(conn, page_raw['html_content'], page_raw['url']):
+        page_obj['info']['page_type_code'] = 'DUPLICATE'
+        return page_obj
 
-    links = []
-    images = []
+    # Parse HTML and extract links
+    soup = BeautifulSoup(page_raw["html_content"], 'html.parser')
 
-    if check_duplicate(conn, page_raw['html_content']):
-        page_raw['page_type_code'] = 'DUPLICATE'
-        print(f"{datetime.datetime.now()} Duplicate {base_url} found")
-    else:
+    # Find the urls in page
+    for link in soup.select('a'):
+        found_link = link.get('href')
+        to = urljoin(base_url, found_link)
+        clean_to = re.sub(r"(\?).*$", "", to)
+        page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
 
-        # Parse HTML and extract links
-        soup = BeautifulSoup(page_raw["html_content"], 'html.parser')
-
-        # Find the urls in page
-        for link in soup.select('a'):
-            found_link = link.get('href')
-            to = urljoin(base_url, found_link)
-            clean_to = re.sub(r"(\?).*$", "", to)
-            links.append({"from_page": base_url, "to_page": clean_to})
-
-        # Find the images in page (<img> tags)
-        for img in soup.select('img'):
-            found_src = img.get('src')
-            if found_src is not None:
-                src_full = urljoin(base_url, found_src)
-                img_info = {
-                    "page_url": base_url,
-                    "filename": os.path.basename(src_full),
-                    "content_type": None,  # TODO: ?
-                    "data": None,
-                    "accessed_time": None
-                }
-                images.append(img_info)
+    # Find the images in page (<img> tags)
+    for img in soup.select('img'):
+        found_src = img.get('src')
+        if found_src is not None:
+            src_full = urljoin(base_url, found_src)
+            img_info = {
+                "page_url": base_url,
+                "filename": os.path.basename(src_full),
+                "content_type": None,  # TODO: ?
+                "data": None,
+                "accessed_time": None
+            }
+            page_obj["imgs"].append(img_info)
 
     # TODO: Page data?
 
     # TODO: Also include links from onclick events
-
-    page_obj = {
-        "info": page_raw,
-        "urls": links,
-        "imgs": images
-    }
 
     return page_obj
 
@@ -209,6 +220,7 @@ def parse_page(page_raw, base_url, conn):
 def request_with_selenium(url):
     """Loads a page with a full web browser to parse javascript"""
 
+    # TODO: Selenium should wait for 5 seconds before requesting the page. Could be done with offline data
     browser.get(url)
     page = browser.page_source
     return page
