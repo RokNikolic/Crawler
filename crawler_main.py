@@ -28,7 +28,6 @@ domain_ips = {}         # domain to ip address map
 ip_last_visits = {}     # time of last visit per ip (to restrict request rate)
 # list of domains we want to visit
 visit_domains = ["https://gov.si", "https://evem.gov.si", "https://e-uprava.gov.si", "https://e-prostor.gov.si"]
-
 # Options for the selenium browser
 option = webdriver.ChromeOptions()
 option.add_argument('--headless')
@@ -86,8 +85,9 @@ def request_page(url):
         "domain": domain,
         "url": url,
         "http_status_code": 0,
-        "accessed_time": 0
-    }        # Raw PAGE content and metadata
+        "accessed_time": 0,
+        "page_data": {}
+    }
 
     # If not enough time has elapsed since last request, return url to end of queue
     if domain in domain_ips:
@@ -124,9 +124,9 @@ def request_page(url):
     if not domain_rules[domain].can_fetch(USERAGENT, url):
         return None, site_data
 
-    # If URL does not contain gov.si don't fetch
-    if "gov.si" not in url:
-        return None, site_data
+    # # If URL does not contain gov.si don't fetch
+    # if "gov.si" not in url:
+    #     return None, site_data
 
     # Make a GET request
     print(f"{datetime.datetime.now()} Fetching {url}")
@@ -161,6 +161,9 @@ def request_page(url):
         crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
     elif response.ok and response.content:
         page_raw["page_type_code"] = "BINARY"
+        page_raw["page_data"] = {
+            "data_type_code": response.headers["content-type"],
+        }
         crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
     else:
         print("Response not ok")
@@ -201,18 +204,35 @@ def parse_page(page_raw, base_url, conn):
         found_src = img.get('src')
         if found_src is not None:
             src_full = urljoin(base_url, found_src)
+
+
+            # Check if src_full is data:image
+            if re.match(r"^data:image", src_full):
+                content_type = re.match(r"(data:image/.*;.*),", src_full).group(1)
+                src_full = "BINARY DATA"
+            else:
+                content_type = os.path.splitext(src_full)[1]
+
             img_info = {
-                "page_url": base_url,
-                "filename": os.path.basename(src_full),
-                "content_type": None,  # TODO: ?
+                "filename": src_full,
+                "content_type": content_type,
                 "data": None,
-                "accessed_time": None
+                "accessed_time": page_raw["accessed_time"]
             }
             page_obj["imgs"].append(img_info)
 
-    # TODO: Page data?
-
-    # TODO: Also include links from onclick events
+    # Find the tags with onclick attribute using BeautifulSoup
+    for tag in soup.find_all(onclick=True):
+        found_link = tag.get('onclick')
+        if found_link is not None:
+            # Find the url in the onclick attribute
+            valid_link = re.search(r"(?<=\').*(?=\')", found_link)
+            if valid_link is not None:
+                found_link = valid_link.group(0)
+                to = urljoin(base_url, found_link)
+                clean_to = re.sub(r"(\?).*$", "", to)
+                page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
+                print(f"Found link in onclick attribute: {clean_to}")
 
     return page_obj
 
@@ -220,7 +240,9 @@ def parse_page(page_raw, base_url, conn):
 def request_with_selenium(url):
     """Loads a page with a full web browser to parse javascript"""
 
-    # TODO: Selenium should wait for 5 seconds before requesting the page. Could be done with offline data
+    # Crawler should wait for 5 seconds before requesting the page again
+    time.sleep(5)
+
     browser.get(url)
     page = browser.page_source
     return page

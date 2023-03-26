@@ -132,7 +132,7 @@ class DBManager:
 
 
     @staticmethod
-    def insert_image(conn, image_json):
+    def insert_image(conn, image_json, url):
         """ Inserts Img into DB and returns img_id. """
         with DBManager.lock:
             cur = conn.cursor()
@@ -141,27 +141,32 @@ class DBManager:
             INSERT INTO crawldb.image (page_id, filename, content_type, "data", accessed_time)
             VALUES (
                 (SELECT id from crawldb.page WHERE url = %s), 
-                %s, %s, %s, %s);
-            """, (image_json['page_url'], image_json['filename'], image_json['content_type'], image_json['data'],
+                %s, %s, %s, to_timestamp(%s))
+            ON CONFLICT DO NOTHING;
+            """, (url, image_json['filename'], image_json['content_type'], image_json['data'],
                   image_json['accessed_time']))
+            print(f"{datetime.datetime.now()} Finished Image insert for {url}")
 
     @staticmethod
-    def insert_page_data(conn, page_data_json):
+    def insert_page_data(conn, page_data_json, url):
         """ Inserts PageData into DB and returns page_data_id. """
         with DBManager.lock:
             cur = conn.cursor()
             cur.execute("""
             -- Insert a new page data object for a given page
             INSERT INTO crawldb.page_data (page_id, data_type_code, "data")
-            VALUES (%d, %s, %s);
-            """, (page_data_json['page_id'], page_data_json['data_type_code'], page_data_json['data']))
+            VALUES (
+                (SELECT id from crawldb.page WHERE url = %s), 
+                %s, %s)
+            ON CONFLICT DO NOTHING;
+            """, (url, page_data_json['data_type_code'], page_data_json['data']))
+            print(f"{datetime.datetime.now()} Finished PageData insert for {url}")
 
     @staticmethod
     def insert_link(conn, link_json):
         """ Inserts Link into DB. """
         with DBManager.lock:
             # First we must check that both pages exist
-            page_from = DBManager.get_page(conn, link_json['from_page'])
             page_to = DBManager.get_page(conn, link_json['to_page'])
 
             if page_to is None:
@@ -175,8 +180,6 @@ class DBManager:
                     "accessed_time": None
                 }
                 DBManager.insert_page_without_lock(conn, page_raw)
-            page_to = DBManager.get_page(conn, link_json['to_page'])
-            # print(f"From {page_from[3]} To {page_to[3]}")
 
             # If page from and to point to same page
             cur = conn.cursor()
@@ -195,13 +198,17 @@ class DBManager:
         # First we must insert the page
         DBManager.insert_page(conn, page_info)
 
+        # We should insert page data if page is binary
+        if page_info['page_type_code'] == 'BINARY':
+            DBManager.insert_page_data(conn, page_info['page_data'], page_info['url'])
+
         # Next lets insert all urls between pages
         for link in urls:
             DBManager.insert_link(conn, link)
 
         # Next lets insert all images
         for img in imgs:
-            DBManager.insert_image(conn, img)
+            DBManager.insert_image(conn, img, page_info['url'])
 
 
 if __name__ == "__main__":
