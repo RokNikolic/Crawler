@@ -65,14 +65,14 @@ class DBManager:
 
     @staticmethod
     def check_if_page_exists(conn, hashcode, url):
-        """Returns True if there exists a page with the same hashcode but different url."""
+        """Returns page_url if there exists a page with the same hashcode but different url otherwise returns False."""
         cur = conn.cursor()
-        cur.execute(f"""SELECT EXISTS(
-            SELECT 1 from crawldb.page
-            WHERE hashcode = %s AND url != %s
-        );""", (hashcode, url))
+        cur.execute(f"""SELECT * from crawldb.page
+            WHERE hashcode = %s AND url != %s;""", (hashcode, url))
         out = cur.fetchone()
-        return out[0]
+        if out is None:
+            return False
+        return out[3]
 
     @staticmethod
     def insert_site(conn, site_json):
@@ -197,6 +197,15 @@ class DBManager:
     def insert_all(conn, page_info, urls, imgs):
         # First we must insert the page
         DBManager.insert_page(conn, page_info)
+
+        # We must insert link to duplicate page if DUPLICATE found:
+        if page_info['page_type_code'] == 'DUPLICATE':
+            link = {
+                'from_page': page_info['url'],
+                'to_page': page_info['duplicate_url']
+            }
+            DBManager.insert_link(conn, link)
+            return
 
         # We should insert page data if page is binary
         if page_info['page_type_code'] == 'BINARY':

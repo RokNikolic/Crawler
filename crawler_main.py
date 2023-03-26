@@ -86,7 +86,8 @@ def request_page(url):
         "url": url,
         "http_status_code": 0,
         "accessed_time": 0,
-        "page_data": {}
+        "page_data": {},            # if page is BINARY, page_data contains metadata
+        "duplicate_url": "",        # If page is duplicate, url of original page
     }
 
     # If not enough time has elapsed since last request, return url to end of queue
@@ -148,6 +149,7 @@ def request_page(url):
         if response.url in crawled_urls:
             print("Already crawled redirect url")
             page_raw["page_type_code"] = "DUPLICATE"
+            page_raw["duplicate_url"] = response.url
     elif response.ok and response.content and "text/html" in response.headers["content-type"]:
         page_raw['html_content'] = response.text
         # Check if we need to use selenium
@@ -185,8 +187,13 @@ def parse_page(page_raw, base_url, conn):
 
     if page_raw is None:
         return None
-    elif page_raw['page_type_code'] == 'DUPLICATE' or check_duplicate(conn, page_raw['html_content'], page_raw['url']):
+
+    duplicate_url = check_duplicate(conn, page_raw['html_content'], page_raw['url'])
+    if page_raw['page_type_code'] == 'DUPLICATE' or duplicate_url:
         page_obj['info']['page_type_code'] = 'DUPLICATE'
+        page_obj['info']['duplicate_url'] = duplicate_url
+        page_obj['info']['hashcode'] = None
+        page_obj['info']['html_content'] = None
         return page_obj
 
     # Parse HTML and extract links
@@ -196,7 +203,7 @@ def parse_page(page_raw, base_url, conn):
     for link in soup.select('a'):
         found_link = link.get('href')
         to = urljoin(base_url, found_link)
-        clean_to = re.sub(r"(\?).*$", "", to)
+        clean_to = re.sub(r"/*([?#].*)?$", "", to)
         page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
 
     # Find the images in page (<img> tags)
@@ -230,7 +237,7 @@ def parse_page(page_raw, base_url, conn):
             if valid_link is not None:
                 found_link = valid_link.group(0)
                 to = urljoin(base_url, found_link)
-                clean_to = re.sub(r"(\?).*$", "", to)
+                clean_to = re.sub(r"/*([?#].*)?$", "", to)
                 page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
                 print(f"Found link in onclick attribute: {clean_to}")
 
