@@ -151,6 +151,14 @@ class DBManager:
     def insert_page_data(conn, page_data_json, url):
         """ Inserts PageData into DB and returns page_data_id. """
         with DBManager.lock:
+            # First insert the data type if it doesn't exist
+            cur = conn.cursor()
+            cur.execute("""
+            INSERT INTO crawldb.data_type (code)
+            VALUES (%s)
+            ON CONFLICT DO NOTHING;
+            """, (page_data_json['data_type_code'],))
+
             cur = conn.cursor()
             cur.execute("""
             -- Insert a new page data object for a given page
