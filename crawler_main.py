@@ -38,15 +38,15 @@ browser = webdriver.Chrome(service=service, options=option)
 
 
 def format_page_data(headers):
-    if headers.contains("pdf"):
+    if "pdf" in headers:
         return "PDF"
-    elif headers.contains("doc"):
+    elif "doc" in headers:
         return "DOC"
-    elif headers.contains("docx"):
+    elif "docx" in headers:
         return "DOCX"
-    elif headers.contains("ppt"):
+    elif "ppt" in headers:
         return "PPT"
-    elif headers.contains("pptx"):
+    elif "pptx" in headers:
         return "PPTX"
     else:
         # Regex to extract just the file type from Content-Type header
@@ -137,7 +137,7 @@ def request_page(url):
             "sitemap": sitemap_content
         }
 
-    # If URL is dissalowed by robots.txt, don't fetch
+    # If URL is disallowed by robots.txt, don't fetch
     if not domain_rules[domain].can_fetch(USERAGENT, url):
         return None, site_data
 
@@ -227,7 +227,6 @@ def parse_page(page_raw, base_url, conn):
         found_src = img.get('src')
         if found_src is not None:
             src_full = urljoin(base_url, found_src)
-
 
             # Check if src_full is data:image
             if re.match(r"^data:image", src_full):
