@@ -37,6 +37,22 @@ service = Service(r'\web_driver\chromedriver.exe')
 browser = webdriver.Chrome(service=service, options=option)
 
 
+def format_page_data(headers):
+    if headers.contains("pdf"):
+        return "PDF"
+    elif headers.contains("doc"):
+        return "DOC"
+    elif headers.contains("docx"):
+        return "DOCX"
+    elif headers.contains("ppt"):
+        return "PPT"
+    elif headers.contains("pptx"):
+        return "PPTX"
+    else:
+        # Regex to extract just the file type from Content-Type header
+        return re.search(r"/(.*)", headers).group(1).upper()
+
+
 def get_hash(page_content):
     """Returns hash from the given HTML content."""
     encoded_content = page_content.encode('utf-8')
@@ -164,7 +180,7 @@ def request_page(url):
     elif response.ok and response.content:
         page_raw["page_type_code"] = "BINARY"
         page_raw["page_data"] = {
-            "data_type_code": response.headers["content-type"],
+            "data_type_code": format_page_data(response.headers["content-type"]),
         }
         crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
     else:
