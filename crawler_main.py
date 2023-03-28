@@ -181,6 +181,7 @@ def request_page(url):
         page_raw["page_type_code"] = "BINARY"
         page_raw["page_data"] = {
             "data_type_code": format_page_data(response.headers["content-type"]),
+            "data": None
         }
         crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
     else:
