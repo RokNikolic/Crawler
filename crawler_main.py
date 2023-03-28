@@ -142,8 +142,8 @@ def request_page(url):
         return None, site_data
 
     # # If URL does not contain gov.si don't fetch
-    # if "gov.si" not in url:
-    #     return None, site_data
+    if "gov.si" not in url:
+        return None, site_data
 
     # Make a GET request
     print(f"{datetime.datetime.now()} Fetching {url}")
@@ -163,7 +163,7 @@ def request_page(url):
     # Check if we got redirected and if we already crawled the redirect url
     if response.history and response.url != url and response.url in crawled_urls:
         if response.url in crawled_urls:
-            print("Already crawled redirect url")
+            # print("Already crawled redirect url")
             page_raw["page_type_code"] = "DUPLICATE"
             page_raw["duplicate_url"] = response.url
     elif response.ok and response.content and "text/html" in response.headers["content-type"]:
@@ -185,7 +185,7 @@ def request_page(url):
         }
         crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
     else:
-        print("Response not ok")
+        # print("Response not ok")
         # If response is not ok, return url to end of queue
         add_to_frontier(url)
         return None, site_data
@@ -255,7 +255,7 @@ def parse_page(page_raw, base_url, conn):
                 to = urljoin(base_url, found_link)
                 clean_to = re.sub(r"/*([?#].*)?$", "", to)
                 page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
-                print(f"Found link in onclick attribute: {clean_to}")
+                # print(f"Found link in onclick attribute: {clean_to}")
 
     return page_obj
 
@@ -271,7 +271,7 @@ def request_with_selenium(url):
     return page
 
 
-def save_to_db(page_obj, site_data, conn):
+def save_to_db(page_obj, site_data, conn, thread_id):
     """Saves parsed site and page data to DB."""
 
     if site_data is not None:
@@ -281,6 +281,7 @@ def save_to_db(page_obj, site_data, conn):
         if page_obj['info']['page_type_code'] != 'DUPLICATE':
             add_urls_to_frontier(page_obj['urls'])
         DBManager.insert_all(conn, page_obj['info'], page_obj['urls'], page_obj['imgs'])
+        print(f"{datetime.datetime.now()} Thread:{thread_id} Processed: {page_obj['info']['url']}")
 
 
 class Crawler(threading.Thread):
@@ -299,7 +300,7 @@ class Crawler(threading.Thread):
         url = get_url_from_frontier()
         page_raw, site_data = request_page(url)
         page_obj = parse_page(page_raw, url, self.conn)
-        save_to_db(page_obj, site_data, self.conn)
+        save_to_db(page_obj, site_data, self.conn, self.threadID)
 
     def run(self):
         """Continuously processes pages from frontier."""
@@ -324,7 +325,7 @@ if __name__ == '__main__':
     for page_url in frontier.queue:
         domain_rules[page_url] = None
 
-    NTHREADS = 1
+    NTHREADS = 3
 
     db_manager = DBManager()
 
