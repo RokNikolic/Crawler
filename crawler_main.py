@@ -3,7 +3,6 @@ import re
 import socket
 import time
 import os
-import traceback
 from bs4 import BeautifulSoup
 import threading
 import requests
@@ -14,7 +13,7 @@ from urllib.robotparser import RobotFileParser
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from backend.sql_commands import DBManager
-
+import logging
 
 # TODO: Add site domains for each seed into DB
 
@@ -26,8 +25,12 @@ crawled_urls = set()    # urls that have been visited
 domain_rules = {}       # robots.txt rules per visited domain
 domain_ips = {}         # domain to ip address map
 ip_last_visits = {}     # time of last visit per ip (to restrict request rate)
+selenium_count = 0
+bad_response_count = 0
+
 # list of domains we want to visit
 visit_domains = ["https://gov.si", "https://evem.gov.si", "https://e-uprava.gov.si", "https://e-prostor.gov.si"]
+
 # Options for the selenium browser
 option = webdriver.ChromeOptions()
 option.add_argument('--headless')
@@ -35,6 +38,21 @@ option.add_argument('--headless')
 # Get and create the selenium browser object
 service = Service(r'\web_driver\chromedriver.exe')
 browser = webdriver.Chrome(service=service, options=option)
+
+# Logger setup
+crawl_logger = logging.getLogger('crawler_logger')
+
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.DEBUG)
+file_handler = logging.FileHandler('main_log.log')
+file_handler.setLevel(logging.WARNING)
+
+formatter1 = logging.Formatter('%(asctime)s - %(message)s')
+stream_handler.setFormatter(formatter1)
+file_handler.setFormatter(formatter1)
+
+crawl_logger.addHandler(stream_handler)
+crawl_logger.addHandler(file_handler)
 
 
 def format_page_data(headers):
@@ -105,6 +123,8 @@ def request_page(url):
         "page_data": {},            # if page is BINARY, page_data contains metadata
         "duplicate_url": "",        # If page is duplicate, url of original page
     }
+    global selenium_count
+    global bad_response_count
 
     # If not enough time has elapsed since last request, return url to end of queue
     if domain in domain_ips:
@@ -146,7 +166,7 @@ def request_page(url):
         return None, site_data
 
     # Make a GET request
-    print(f"{datetime.datetime.now()} Fetching {url}")
+    crawl_logger.info(f"Fetching {url}")
     req_time = time.time()
     response = requests.get(url, stream=True)
 
@@ -163,20 +183,22 @@ def request_page(url):
     # Check if we got redirected and if we already crawled the redirect url
     if response.history and response.url != url and response.url in crawled_urls:
         if response.url in crawled_urls:
-            # print("Already crawled redirect url")
+            # crawl_logger.info("Already crawled redirect url")
             page_raw["page_type_code"] = "DUPLICATE"
             page_raw["duplicate_url"] = response.url
     elif response.ok and response.content and "text/html" in response.headers["content-type"]:
         page_raw['html_content'] = response.text
         # Check if we need to use selenium
         if len(response.text) < 1000:
-            print(f"Using selenium")
+            crawl_logger.warning(f"Using selenium, use count: {selenium_count}")
             # Use selenium
             selenium_response = request_with_selenium(url)
             page_raw['html_content'] = selenium_response
+            selenium_count += 1  # Count selenium uses
         page_raw["page_type_code"] = "HTML"
         page_raw["hashcode"] = get_hash(page_raw["html_content"])
         crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
+        crawl_logger.warning(f"Amount of crawled urls: {len(crawled_urls)}")
     elif response.ok and response.content:
         page_raw["page_type_code"] = "BINARY"
         page_raw["page_data"] = {
@@ -185,9 +207,10 @@ def request_page(url):
         }
         crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
     else:
-        # print("Response not ok")
+        bad_response_count += 1
+        crawl_logger.warning(f"Response not ok, count: {bad_response_count}")
         # If response is not ok, return url to end of queue
-        add_to_frontier(url)
+        # add_to_frontier(url)
         return None, site_data
 
     return page_raw, site_data
@@ -255,7 +278,7 @@ def parse_page(page_raw, base_url, conn):
                 to = urljoin(base_url, found_link)
                 clean_to = re.sub(r"/*([?#].*)?$", "", to)
                 page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
-                # print(f"Found link in onclick attribute: {clean_to}")
+                # crawl_logger.info(f"Found link in onclick attribute: {clean_to}")
 
     return page_obj
 
@@ -281,7 +304,7 @@ def save_to_db(page_obj, site_data, conn, thread_id):
         if page_obj['info']['page_type_code'] != 'DUPLICATE':
             add_urls_to_frontier(page_obj['urls'])
         DBManager.insert_all(conn, page_obj['info'], page_obj['urls'], page_obj['imgs'])
-        print(f"{datetime.datetime.now()} Thread:{thread_id} Processed: {page_obj['info']['url']}")
+        crawl_logger.info(f"Thread:{thread_id} Processed: {page_obj['info']['url']}")
 
 
 class Crawler(threading.Thread):
@@ -309,13 +332,13 @@ class Crawler(threading.Thread):
             try:
                 self.process_next()
             except Exception as e:
-                print(e, traceback.format_exc())
+                crawl_logger.exception(f"Error: {e}")
                 continue
                 # TODO
 
 
 if __name__ == '__main__':
-    print(f"Start Time: {time.time()}")
+    crawl_logger.warning(f"Start Time: {datetime.datetime.now()}")
 
     # Add seed urls of domains we want to visit
     for domain_url in visit_domains:
@@ -325,7 +348,7 @@ if __name__ == '__main__':
     for page_url in frontier.queue:
         domain_rules[page_url] = None
 
-    NTHREADS = 3
+    NTHREADS = 2
 
     db_manager = DBManager()
 
