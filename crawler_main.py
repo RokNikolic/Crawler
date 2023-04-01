@@ -20,6 +20,8 @@ import logging
 
 # GLOBALS
 USERAGENT = "fri-wier-GROUP_NAME"
+headers = {'User-Agent': USERAGENT}
+
 frontier = Queue()      # urls to be visited
 crawled_urls = set()    # urls that have been visited
 domain_rules = {}       # robots.txt rules per visited domain
@@ -34,10 +36,6 @@ visit_domains = ["https://gov.si", "https://evem.gov.si", "https://e-uprava.gov.
 # Options for the selenium browser
 option = webdriver.ChromeOptions()
 option.add_argument('--headless')
-
-# Get and create the selenium browser object
-service = Service(r'\web_driver\chromedriver.exe')
-browser = webdriver.Chrome(service=service, options=option)
 
 # Logger setup
 crawl_logger = logging.getLogger('crawler_logger')
@@ -115,7 +113,7 @@ def request_page(url):
     page_raw = {
         "html_content": "",
         "hashcode": "",
-        "page_type_code": "",
+        "page_type_code": "HTML",
         "domain": domain,
         "url": url,
         "http_status_code": 0,
@@ -145,12 +143,12 @@ def request_page(url):
         domain_rules[domain] = rp
 
         # Make site info dict with robots.txt and sitemap contents
-        robots_content = requests.get(robots_url).text
+        robots_content = requests.get(robots_url, headers).text
         sitemap_urls = rp.site_maps()
         if sitemap_urls is None:
             sitemap_content = None
         else:
-            sitemap_content = requests.get(sitemap_urls[0]).text
+            sitemap_content = requests.get(sitemap_urls[0], headers).text
         site_data = {
             "domain": domain,
             "robots": robots_content,
@@ -168,7 +166,7 @@ def request_page(url):
     # Make a GET request
     crawl_logger.info(f"Fetching {url}")
     req_time = time.time()
-    response = requests.get(url, stream=True)
+    response = requests.get(url, headers, stream=True)
 
     # Save server IP and request time
     if socket.gethostbyname(domain):
@@ -189,7 +187,7 @@ def request_page(url):
     elif response.ok and response.content and "text/html" in response.headers["content-type"]:
         page_raw['html_content'] = response.text
         # Check if we need to use selenium
-        if len(response.text) < 1000:
+        if len(response.text) < 20000:
             crawl_logger.warning(f"Using selenium, use count: {selenium_count}")
             # Use selenium
             selenium_response = request_with_selenium(url)
@@ -209,9 +207,11 @@ def request_page(url):
     else:
         bad_response_count += 1
         crawl_logger.warning(f"Response not ok, count: {bad_response_count}")
-        # If response is not ok, return url to end of queue
-        # add_to_frontier(url)
-        return None, site_data
+
+        # If response not ok, we must store a page_raw with only url and http_status_code
+        page_raw["http_status_code"] = response.status_code
+        page_raw["page_type_code"] = "HTML"
+        return page_raw, site_data
 
     return page_raw, site_data
 
@@ -272,19 +272,24 @@ def parse_page(page_raw, base_url, conn):
         found_link = tag.get('onclick')
         if found_link is not None:
             # Find the url in the onclick attribute
-            valid_link = re.search(r"(?<=\').*(?=\')", found_link)
-            if valid_link is not None:
-                found_link = valid_link.group(0)
-                to = urljoin(base_url, found_link)
-                clean_to = re.sub(r"/*([?#].*)?$", "", to)
-                page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
-                # crawl_logger.info(f"Found link in onclick attribute: {clean_to}")
+            valid_links = re.findall(r"(?i)\b(?:(?:https?|ftp)://|www\.|/)\S+\b", found_link)
+            for link in valid_links:
+                if link is not None:
+                    found_link = link.group(0)
+                    to = urljoin(base_url, found_link)
+                    clean_to = re.sub(r"/*([?#].*)?$", "", to)
+                    page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
+                    # crawl_logger.info(f"Found link in onclick attribute: {clean_to}")
 
     return page_obj
 
 
 def request_with_selenium(url):
     """Loads a page with a full web browser to parse javascript"""
+
+    # Get and create the selenium browser object
+    service = Service(r'\web_driver\chromedriver.exe')
+    browser = webdriver.Chrome(service=service, options=option)
 
     # Crawler should wait for 5 seconds before requesting the page again
     time.sleep(5)
@@ -334,7 +339,6 @@ class Crawler(threading.Thread):
             except Exception as e:
                 crawl_logger.exception(f"Error: {e}")
                 continue
-                # TODO
 
 
 if __name__ == '__main__':
