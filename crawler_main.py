@@ -348,7 +348,11 @@ if __name__ == '__main__':
     for page_url in frontier.queue:
         domain_rules[page_url] = None
 
-    NTHREADS = 2
+    NTHREADS = 6
+    # Testing different thread amounts for 15 minutes of crawling
+    # 1: Amount of crawled urls: 335
+    # 2: Amount of crawled urls: 621
+    # 4: Amount of crawled urls: 1067
 
     db_manager = DBManager()
 
@@ -358,12 +362,13 @@ if __name__ == '__main__':
         crawlers.append(crawler)
         crawler.start()
 
-    while True:
+    # Run crawlers for a set time
+    time_start = time.perf_counter()
+    time_dif = time_start - time.perf_counter()
+
+    run_time = 15  # In minutes
+    while time_dif < (run_time * 60):
         time.sleep(1)
-        # try:
-        #     time.sleep(1)
-        # except Exception as e:
-        #     print(e)
-        #     print(frontier)
-        #     print(ip_last_visits)
-        #     exit()
+        time_dif = time.perf_counter() - time_start
+
+    crawl_logger.warning(f"Using selenium, use count: {selenium_count}")
