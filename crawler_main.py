@@ -187,7 +187,7 @@ def request_page(url):
     elif response.ok and response.content and "text/html" in response.headers["content-type"]:
         page_raw['html_content'] = response.text
         # Check if we need to use selenium
-        if len(response.text) < 20000:
+        if len(response.text) < 30000:
             crawl_logger.warning(f"Using selenium, use count: {selenium_count}")
             # Use selenium
             selenium_response = request_with_selenium(url)
@@ -352,11 +352,17 @@ if __name__ == '__main__':
     for page_url in frontier.queue:
         domain_rules[page_url] = None
 
-    NTHREADS = 6
+    NTHREADS = 10  # Use 10
     # Testing different thread amounts for 15 minutes of crawling
     # 1: Amount of crawled urls: 335
     # 2: Amount of crawled urls: 621
     # 4: Amount of crawled urls: 1067
+    # 6: Amount of crawled urls: 1261
+    # 8: Amount of crawled urls: 1406
+    # 10: Amount of crawled urls: 1702
+    # 12: Amount of crawled urls: 1640
+    # 10: Amount of crawled urls: 1579, Using selenium, use count: 37, len < 20.000
+    # 10: Amount of crawled urls: 1266, Using selenium, use count: 383, len < 30.000  <<< good options
 
     db_manager = DBManager()
 
