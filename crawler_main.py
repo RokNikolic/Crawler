@@ -3,18 +3,22 @@ import re
 import socket
 import time
 import os
-from bs4 import BeautifulSoup
 import threading
 import requests
 import hashlib
 from queue import Queue
+import logging
+import pickle
+import dill
+
+from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
+
 from backend.sql_commands import DBManager
-import logging
-import pickle
+
 
 # TODO: Add site domains for each seed into DB
 
@@ -348,13 +352,10 @@ class Crawler(threading.Thread):
 if __name__ == '__main__':
     crawl_logger.warning(f"Start Time: {datetime.datetime.now()}")
 
-    # Initialize old frontier
-    try:
-        if os.path.exists("checkpoint.pkl"):
-            with open("checkpoint.pkl", "rb") as f:
-                frontier, crawled_urls = pickle.load(f)
-    except Exception as e:
-        print(e)
+    # If it exists, start from a checkpoint frontier
+    if os.path.exists("checkpoint.pkl"):
+        with open("checkpoint.pkl", "rb") as f:
+            frontier, crawled_urls = dill.load(f)
 
     # Add seed urls of domains we want to visit if frontier is empty
     if frontier.empty():
@@ -395,10 +396,9 @@ if __name__ == '__main__':
         time.sleep(1)
         time_dif = time.perf_counter() - time_start
 
-    # Store variables frontier and crawled_urls to file with pickle
-    frontier_list = list(frontier)
-    crawled_urls_list = list(crawled_urls)
-    with open('checkpoint.pkl', 'wb') as f:
-        pickle.dump([frontier_list, crawled_urls_list], f, protocol=1)
+        # Store variables frontier and crawled_urls every minute
+        if int(time_dif) % 60:
+            with open('checkpoint.pkl', 'wb') as f:
+                dill.dump([frontier, crawled_urls], f)
 
     crawl_logger.warning(f"Using selenium, use count: {selenium_count}")
