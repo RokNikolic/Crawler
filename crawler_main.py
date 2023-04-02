@@ -8,9 +8,7 @@ import requests
 import hashlib
 from queue import Queue
 import logging
-import pickle
 import dill
-
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
@@ -132,7 +130,7 @@ def request_page(url):
     # If not enough time has elapsed since last request, return url to end of queue
     if domain in domain_ips:
         ip = domain_ips[domain]
-        since_last_req = time.time() - ip_last_visits[ip]
+        since_last_req = time.perf_counter() - ip_last_visits[ip]
         robots_delay = domain_rules[domain].crawl_delay(USERAGENT)
         min_delay = robots_delay if robots_delay is not None else 5
         if since_last_req < min_delay:
@@ -170,7 +168,7 @@ def request_page(url):
 
     # Make a GET request
     crawl_logger.info(f"Fetching {url}")
-    req_time = time.time()
+    req_time = time.perf_counter()
     response = requests.get(url, headers, stream=True)
 
     # Save server IP and request time
@@ -323,12 +321,13 @@ def save_to_db(page_obj, site_data, conn, thread_id):
 class Crawler(threading.Thread):
     """A single web crawler instance - continuously runs in own thread."""
 
-    def __init__(self, thread_id, frontier_in, conn):
+    def __init__(self, thread_id, frontier_in, conn, stop_event):
         super().__init__()
         self.threadID = thread_id
         self.frontier = frontier_in
         self.conn = conn
         self.daemon = True
+        self.stop_event = stop_event
 
     def process_next(self):
         """Fetches, parses and saves next page from frontier."""
@@ -341,25 +340,29 @@ class Crawler(threading.Thread):
     def run(self):
         """Continuously processes pages from frontier."""
 
-        while True:
+        while not self.stop_event.is_set():
             try:
                 self.process_next()
-            except Exception as e:
-                crawl_logger.exception(f"Error: {e}")
+            except Exception as er:
+                crawl_logger.exception(f"Error: {er}")
                 continue
 
 
 if __name__ == '__main__':
     crawl_logger.warning(f"Start Time: {datetime.datetime.now()}")
 
-    # If it exists, start from a checkpoint frontier
-    if os.path.exists("checkpoint.pkl"):
-        with open("checkpoint.pkl", "rb") as f:
-            frontier, crawled_urls = dill.load(f)
+    try:
+        # If it exists, start from a checkpoint frontier
+        if os.path.exists("checkpoint.pkl"):
+            with open("checkpoint.pkl", "rb") as f:
+                frontier, crawled_urls = dill.load(f)
+            crawl_logger.warning("Loading frontier!")
+    except Exception as e:
+        crawl_logger.exception(f"Error: {e}")
 
     # Add seed urls of domains we want to visit if frontier is empty
     if frontier.empty():
-        print("test")
+        crawl_logger.warning("Starting from empty frontier!")
         for domain_url in visit_domains:
             add_to_frontier(domain_url)
 
@@ -382,8 +385,9 @@ if __name__ == '__main__':
     db_manager = DBManager()
 
     crawlers = []
+    event = threading.Event()
     for i in range(NTHREADS):
-        crawler = Crawler(i, frontier, db_manager.get_connection())
+        crawler = Crawler(i, frontier, db_manager.get_connection(), event)
         crawlers.append(crawler)
         crawler.start()
 
@@ -391,14 +395,16 @@ if __name__ == '__main__':
     time_start = time.perf_counter()
     time_dif = time_start - time.perf_counter()
 
-    run_time = (1)  # In minutes
+    run_time = (1*60)  # In minutes
     while time_dif < (run_time * 60):
         time.sleep(1)
         time_dif = time.perf_counter() - time_start
 
-        # Store variables frontier and crawled_urls every minute
-        if int(time_dif) % 60:
-            with open('checkpoint.pkl', 'wb') as f:
-                dill.dump([frontier, crawled_urls], f)
+    # Stopping the threads with event setting
+    event.set()
+
+    # Store variables frontier and crawled_urls
+    with open('checkpoint.pkl', 'wb') as f:
+        dill.dump([frontier, crawled_urls], f)
 
     crawl_logger.warning(f"Using selenium, use count: {selenium_count}")
