@@ -14,6 +14,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from backend.sql_commands import DBManager
 import logging
+import pickle
 
 # TODO: Add site domains for each seed into DB
 
@@ -345,6 +346,11 @@ class Crawler(threading.Thread):
 
 
 if __name__ == '__main__':
+    # Initialize frontier
+    if os.path.exists("checkpoint.pkl"):
+        with open("checkpoint.pkl", "rb") as f:
+            frontier, crawled_urls = pickle.load(f)
+
     crawl_logger.warning(f"Start Time: {datetime.datetime.now()}")
 
     # Add seed urls of domains we want to visit
@@ -383,5 +389,9 @@ if __name__ == '__main__':
     while time_dif < (run_time * 60):
         time.sleep(1)
         time_dif = time.perf_counter() - time_start
+
+    # Store variables frontier and crawled_urls to file with pickle
+    with open('checkpoint.pkl', 'w') as f:
+        pickle.dump([frontier, crawled_urls], f, protocol=1)
 
     crawl_logger.warning(f"Using selenium, use count: {selenium_count}")
