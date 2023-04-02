@@ -346,16 +346,21 @@ class Crawler(threading.Thread):
 
 
 if __name__ == '__main__':
-    # Initialize frontier
-    if os.path.exists("checkpoint.pkl"):
-        with open("checkpoint.pkl", "rb") as f:
-            frontier, crawled_urls = pickle.load(f)
-
     crawl_logger.warning(f"Start Time: {datetime.datetime.now()}")
 
-    # Add seed urls of domains we want to visit
-    for domain_url in visit_domains:
-        add_to_frontier(domain_url)
+    # Initialize old frontier
+    try:
+        if os.path.exists("checkpoint.pkl"):
+            with open("checkpoint.pkl", "rb") as f:
+                frontier, crawled_urls = pickle.load(f)
+    except Exception as e:
+        print(e)
+
+    # Add seed urls of domains we want to visit if frontier is empty
+    if frontier.empty():
+        print("test")
+        for domain_url in visit_domains:
+            add_to_frontier(domain_url)
 
     # Init base domains
     for page_url in frontier.queue:
@@ -385,13 +390,15 @@ if __name__ == '__main__':
     time_start = time.perf_counter()
     time_dif = time_start - time.perf_counter()
 
-    run_time = 15  # In minutes
+    run_time = (1)  # In minutes
     while time_dif < (run_time * 60):
         time.sleep(1)
         time_dif = time.perf_counter() - time_start
 
     # Store variables frontier and crawled_urls to file with pickle
-    with open('checkpoint.pkl', 'w') as f:
-        pickle.dump([frontier, crawled_urls], f, protocol=1)
+    frontier_list = list(frontier)
+    crawled_urls_list = list(crawled_urls)
+    with open('checkpoint.pkl', 'wb') as f:
+        pickle.dump([frontier_list, crawled_urls_list], f, protocol=1)
 
     crawl_logger.warning(f"Using selenium, use count: {selenium_count}")
