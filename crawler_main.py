@@ -253,8 +253,11 @@ def parse_page(page_raw, base_url, conn):
             src_full = urljoin(base_url, found_src)
 
             # Check if src_full is data:image
-            if re.match(r"^data:image", src_full):
+            if re.match(r"data:image", src_full):
                 content_type = re.match(r"(data:image/.*;.*),", src_full).group(1)
+                src_full = "BINARY DATA"
+            elif len(src_full) >= 255:
+                # If src is too long, don't save it
                 src_full = "BINARY DATA"
             else:
                 content_type = os.path.splitext(src_full)[1]
