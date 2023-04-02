@@ -14,7 +14,6 @@ from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-
 from backend.sql_commands import DBManager
 
 
@@ -47,29 +46,32 @@ stream_handler = logging.StreamHandler()
 stream_handler.setLevel(logging.DEBUG)
 file_handler = logging.FileHandler('main_log.log')
 file_handler.setLevel(logging.WARNING)
+error_handler = logging.FileHandler('error_log.log')
+error_handler.setLevel(logging.ERROR)
 
 formatter1 = logging.Formatter('%(asctime)s - %(message)s')
 stream_handler.setFormatter(formatter1)
 file_handler.setFormatter(formatter1)
+error_handler.setFormatter(formatter1)
 
 crawl_logger.addHandler(stream_handler)
 crawl_logger.addHandler(file_handler)
 
 
-def format_page_data(headers):
-    if "pdf" in headers:
+def format_page_data(header):
+    if "pdf" in header:
         return "PDF"
-    elif "doc" in headers:
+    elif "doc" in header:
         return "DOC"
-    elif "docx" in headers:
+    elif "docx" in header:
         return "DOCX"
-    elif "ppt" in headers:
+    elif "ppt" in header:
         return "PPT"
-    elif "pptx" in headers:
+    elif "pptx" in header:
         return "PPTX"
     else:
         # Regex to extract just the file type from Content-Type header
-        return re.search(r"/(.*)", headers).group(1).upper()
+        return re.search(r"/(.*)", header).group(1).upper()
 
 
 def get_hash(page_content):
@@ -261,6 +263,7 @@ def parse_page(page_raw, base_url, conn):
                 src_full = "BINARY DATA"
             elif len(src_full) >= 255:
                 # If src is too long, don't save it
+                content_type = ""
                 src_full = "BINARY DATA"
             else:
                 content_type = os.path.splitext(src_full)[1]
@@ -281,7 +284,7 @@ def parse_page(page_raw, base_url, conn):
             valid_links = re.findall(r"(?i)\b(?:(?:https?|ftp)://|www\.|/)\S+\b", found_link)
             for link in valid_links:
                 if link is not None:
-                    found_link = link.group(0)
+                    found_link = link
                     to = urljoin(base_url, found_link)
                     clean_to = re.sub(r"/*([?#].*)?$", "", to)
                     page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
@@ -395,7 +398,7 @@ if __name__ == '__main__':
     time_start = time.perf_counter()
     time_dif = time_start - time.perf_counter()
 
-    run_time = (1*60)  # In minutes
+    run_time = (3*60)  # In minutes
     while time_dif < (run_time * 60):
         time.sleep(1)
         time_dif = time.perf_counter() - time_start
