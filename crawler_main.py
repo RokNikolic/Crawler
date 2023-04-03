@@ -316,7 +316,7 @@ def save_to_db(page_obj, site_data, conn, thread_id):
     if page_obj is not None:
         if page_obj['info']['page_type_code'] != 'DUPLICATE':
             add_urls_to_frontier(page_obj['urls'])
-        DBManager.insert_all(conn, page_obj['info'], page_obj['urls'], page_obj['imgs'])
+        DBManager.insert_all(conn, page_obj['info'], page_obj['urls'], page_obj['imgs'], logging=crawl_logger)
         crawl_logger.info(f"Thread:{thread_id} Processed: {page_obj['info']['url']}")
 
 

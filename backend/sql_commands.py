@@ -171,9 +171,15 @@ class DBManager:
             print(f"{datetime.datetime.now()} Finished PageData insert for {url}")
 
     @staticmethod
-    def insert_link(conn, link_json):
+    def insert_link(conn, link_json, logging=None):
         """ Inserts Link into DB. """
         with DBManager.lock:
+            # Extra error handling due to some links being None
+            if not link_json['to_page']:
+                if logging:
+                    logging.warning(f"Link to_page is None: {link_json}")
+                return
+
             # First we must check that both pages exist
             page_to = DBManager.get_page(conn, link_json['to_page'])
 
@@ -202,7 +208,7 @@ class DBManager:
             """, (link_json['from_page'], link_json['to_page']))
 
     @staticmethod
-    def insert_all(conn, page_info, urls, imgs):
+    def insert_all(conn, page_info, urls, imgs, logging=None):
         # First we must insert the page
         DBManager.insert_page(conn, page_info)
 
@@ -212,7 +218,7 @@ class DBManager:
                 'from_page': page_info['url'],
                 'to_page': page_info['duplicate_url']
             }
-            DBManager.insert_link(conn, link)
+            DBManager.insert_link(conn, link, logging=logging)
             return
 
         # We should insert page data if page is binary
