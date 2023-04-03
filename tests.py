@@ -6,6 +6,9 @@ from selenium.webdriver.chrome.service import Service
 import re
 import requests
 
+from backend.sql_commands import DBManager
+from crawler_main import check_duplicate
+
 # # Options for the browser
 # option = webdriver.ChromeOptions()
 # option.add_argument('--headless')
@@ -68,13 +71,25 @@ import requests
 
 # Testing finding links in onclick events
 # Find the tags with onclick attribute using BeautifulSoup
-response = requests.get("https://www.plus2net.com/html_tutorial/button-linking.php", stream=True)
-soup = BeautifulSoup(response.text, "html.parser")
+# response = requests.get("https://www.plus2net.com/html_tutorial/button-linking.php", stream=True)
+# soup = BeautifulSoup(response.text, "html.parser")
+#
+# for tag in soup.find_all(onclick=True):
+#     found_link = tag.get('onclick')
+#     if found_link is not None:
+#         # Find the url in the onclick attribute
+#         valid_link = re.search(r"(?<=\').*(?=\')", found_link)
+#         if valid_link is not None:
+#             print(f"In {found_link} found {valid_link.group(0)}")
 
-for tag in soup.find_all(onclick=True):
-    found_link = tag.get('onclick')
-    if found_link is not None:
-        # Find the url in the onclick attribute
-        valid_link = re.search(r"(?<=\').*(?=\')", found_link)
-        if valid_link is not None:
-            print(f"In {found_link} found {valid_link.group(0)}")
+# Testing if duplicate checking works correctly for redirects
+db_manager = DBManager()
+url = "https://e-uprava.gov.si/it/javne-evidence.html"
+response = requests.get(url, stream=True)
+conn = db_manager.get_connection()
+
+if response.history and response.url != url:
+    # crawl_logger.info("Already crawled redirect url")
+    page_raw["page_type_code"] = "DUPLICATE"
+    page_raw["duplicate_url"] = response.url
+print(check_duplicate(conn, response.text, "https://e-uprava.gov.si/it/javne-evidence.html"))

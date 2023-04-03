@@ -233,8 +233,16 @@ def parse_page(page_raw, base_url, conn):
     if page_raw is None:
         return None
 
+    # Page is duplicate, due to redirect
+    if page_raw['page_type_code'] == 'DUPLICATE':
+        page_obj['info']['page_type_code'] = 'DUPLICATE'
+        page_obj['info']['hashcode'] = None
+        page_obj['info']['html_content'] = None
+        return page_obj
+
+    # Page is duplicate, due to hashcode
     duplicate_url = check_duplicate(conn, page_raw['html_content'], page_raw['url'])
-    if page_raw['page_type_code'] == 'DUPLICATE' or duplicate_url:
+    if duplicate_url:
         page_obj['info']['page_type_code'] = 'DUPLICATE'
         page_obj['info']['duplicate_url'] = duplicate_url
         page_obj['info']['hashcode'] = None
