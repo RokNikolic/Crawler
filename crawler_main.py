@@ -32,6 +32,7 @@ bad_response_count = 0
 
 # list of domains we want to visit
 visit_domains = ["https://gov.si", "https://evem.gov.si", "https://e-uprava.gov.si", "https://e-prostor.gov.si"]
+
 # Options for the selenium browser
 option = webdriver.ChromeOptions()
 option.add_argument('--headless')
@@ -183,11 +184,18 @@ def request_page(url, web_driver=None):
     page_raw["http_status_code"] = response.status_code
 
     # Check if we got redirected and if we already crawled the redirect url
-    if response.history and response.url != url and response.url in crawled_urls:
-        if response.url in crawled_urls:
-            # crawl_logger.info("Already crawled redirect url")
-            page_raw["page_type_code"] = "DUPLICATE"
-            page_raw["duplicate_url"] = response.url
+    if response.history and response.url != url:
+        # If we got redirected and url was already crawled, mark page as duplicate
+        crawl_logger.info("Already crawled redirect url")
+        page_raw["page_type_code"] = "DUPLICATE"
+        page_raw["duplicate_url"] = response.url
+        crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
+
+        # If we got redirected and url was not yet crawled, add it to frontier
+        if response.url not in crawled_urls:
+            crawl_logger.info("Redirected to new url")
+            add_to_frontier(response.url)
+
     elif response.ok and response.content and "text/html" in response.headers["content-type"]:
         page_raw['html_content'] = response.text
         # Check if we need to use selenium
@@ -336,7 +344,6 @@ class Crawler(threading.Thread):
         self.frontier = frontier_in
         self.conn = conn
         self.daemon = True
-        self.stop_event = stop_event
         self.web_driver = webdriver.Chrome(service=Service(r'\web_driver\chromedriver.exe'), options=option)
 
     def process_next(self):
@@ -349,10 +356,12 @@ class Crawler(threading.Thread):
 
     def run(self):
         """Continuously processes pages from frontier."""
-
-        while not self.stop_event.is_set():
+        runtime = 60 * 180  # 3 hours
+        stime = time.thread_time()
+        while time.thread_time() - stime < runtime:
             try:
-                self.process_next()
+                #self.process_next()
+                break
             except Exception as er:
                 crawl_logger.exception(f"Error: {er}")
                 break
@@ -401,17 +410,30 @@ if __name__ == '__main__':
         crawlers.append(crawler)
         crawler.start()
 
-    # Run crawlers for a set time
-    time_start = time.perf_counter()
-    time_dif = time_start - time.perf_counter()
+    print("Crawlers started!")
 
-    run_time = (4*60)  # In minutes
-    while time_dif < (run_time * 60):
-        time.sleep(1)
-        time_dif = time.perf_counter() - time_start
+    for crawler in crawlers:
+        crawler.join()
 
-    # Stopping the threads with event setting
-    event.set()
+    print("Crawlers finished!")
+
+    # # Run crawlers for a set time
+    # time_start = time.perf_counter()
+    # time_dif = time_start - time.perf_counter()
+    #
+    # run_time = (4*60)  # In minutes
+    # while time_dif < (run_time * 60):
+    #     time.sleep(1)
+    #     time_dif = time.perf_counter() - time_start
+    #
+    #     # Check if all threads are still alive
+    #     any_crawler_alive = any(crawler.is_alive() for crawler in crawlers)
+    #     print(any_crawler_alive)
+    #     if not any_crawler_alive:
+    #         break
+    #
+    # # Stopping the threads with event setting
+    # event.set()
 
     # Store variables frontier and crawled_urls
     with open('checkpoint.pkl', 'wb') as f:

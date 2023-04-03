@@ -43,6 +43,12 @@ class DBManager:
         return rows
 
     @staticmethod
+    def get_crawled_urls(conn, url):
+        cur = conn.cursor()
+        cur.execute("SELECT url FROM crawldb.page WHERE page_type_code = 'HTML';", (url,))
+
+
+    @staticmethod
     def get_site(conn, domain):
         cur = conn.cursor()
         cur.execute("SELECT * FROM crawldb.site WHERE \"domain\"  = %s", (domain,))
@@ -111,7 +117,7 @@ class DBManager:
             INSERT INTO crawldb.page (site_id, page_type_code, url, html_content, hashcode, http_status_code, accessed_time)
             VALUES (
                 (SELECT id FROM crawldb.site WHERE "domain" = %s), %s, %s, %s, %s, %s, to_timestamp(%s));
-            """, (page_json['domain'], page_json['page_type_code'], page_json['url'], page_json['html_content'],
+            """, (page_json['domain'], page_json['page_type_code'], page_json['url'][:3000], page_json['html_content'],
                   page_json['hashcode'], page_json['http_status_code'], page_json['accessed_time']))
         elif page[4] is None:
             cur.execute("""
@@ -125,7 +131,7 @@ class DBManager:
                 accessed_time = to_timestamp(%s)
             WHERE url = %s
             """, (page_json['domain'], page_json['page_type_code'], page_json['html_content'], page_json['hashcode'],
-                  page_json['http_status_code'], page_json['accessed_time'], page_json['url']))
+                  page_json['http_status_code'], page_json['accessed_time'], page_json['url'][:3000]))
             print(f"{datetime.datetime.now()} Finished Page insert for {page_json['url']}")
         else:
             print(f"{datetime.datetime.now()} Page already exists and filled.")
