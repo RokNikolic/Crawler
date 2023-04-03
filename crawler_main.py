@@ -348,20 +348,18 @@ class Crawler(threading.Thread):
         """Fetches, parses and saves next page from frontier."""
 
         url = get_url_from_frontier()
-        page_raw, site_data = request_page(url, web_driver=self.web_driver)
+        page_raw, site_data = request_page(url, web_driver=self.web_driver, threadID=self.threadID)
         page_obj = parse_page(page_raw, url, self.conn)
         save_to_db(page_obj, site_data, self.conn, self.threadID)
 
     def run(self):
         """Continuously processes pages from frontier."""
         while not self.stop_event.is_set():
-            time.sleep(1)
-            # try:
-            #     #self.process_next()
-            #     #break
-            # except Exception as er:
-            #     crawl_logger.exception(f"Error: {er}")
-            #     break
+            try:
+                self.process_next()
+            except Exception as er:
+                crawl_logger.exception(f"Error: {er}")
+                break
 
 
 if __name__ == '__main__':
