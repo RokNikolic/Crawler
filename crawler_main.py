@@ -42,9 +42,9 @@ crawl_logger = logging.getLogger('crawler_logger')
 
 stream_handler = logging.StreamHandler()
 stream_handler.setLevel(logging.DEBUG)
-file_handler = logging.FileHandler(f'info_log_{datetime.datetime.now()}.log')
+file_handler = logging.FileHandler(f'info_log_{datetime.datetime.now():%Y-%m-%d_%H-%M}.log')
 file_handler.setLevel(logging.WARNING)
-error_handler = logging.FileHandler(f'error_log_{datetime.datetime.now()}.log')
+error_handler = logging.FileHandler(f'error_log_{datetime.datetime.now():%Y-%m-%d_%H-%M}.log')
 error_handler.setLevel(logging.ERROR)
 
 formatter1 = logging.Formatter('%(asctime)s - %(message)s')
