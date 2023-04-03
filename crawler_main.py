@@ -311,8 +311,13 @@ def request_with_selenium(url, web_driver=None):
     # Crawler should wait for 5 seconds before requesting the page again
     time.sleep(5)
 
+    # If no web driver is provided one is created and destroyed after
     if web_driver is None:
-        web_driver = webdriver.Chrome()
+        web_driver = webdriver.Chrome(service=Service(r'\web_driver\chromedriver.exe'), options=option)
+        web_driver.get(url)
+        page = web_driver.page_source
+        web_driver.quit()
+        return page
 
     web_driver.get(url)
     page = web_driver.page_source
@@ -360,6 +365,9 @@ class Crawler(threading.Thread):
             except Exception as er:
                 crawl_logger.exception(f"Error: {er}")
                 break
+
+        # Close the web drives on exit
+        self.web_driver.quit()
 
 
 if __name__ == '__main__':
