@@ -7,7 +7,7 @@ import re
 import requests
 
 from backend.sql_commands import DBManager
-from crawler_main import check_duplicate
+from crawler_main import check_duplicate, get_hash
 
 # # Options for the browser
 # option = webdriver.ChromeOptions()
@@ -84,12 +84,21 @@ from crawler_main import check_duplicate
 
 # Testing if duplicate checking works correctly for redirects
 db_manager = DBManager()
-url = "https://e-uprava.gov.si/it/javne-evidence.html"
-response = requests.get(url, stream=True)
 conn = db_manager.get_connection()
 
+url = "https://e-uprava.gov.si/it/javne-evidence.html"
+response = requests.get(url, stream=True)
 if response.history and response.url != url:
-    # crawl_logger.info("Already crawled redirect url")
-    page_raw["page_type_code"] = "DUPLICATE"
-    page_raw["duplicate_url"] = response.url
-print(check_duplicate(conn, response.text, "https://e-uprava.gov.si/it/javne-evidence.html"))
+    print(response.url)
+f_hash = get_hash(response.text)
+
+url = "https://e-uprava.gov.si/it/javne-evidence/odtujeni-dokumenti.html"
+r2 = requests.get(url, stream=True)
+l_hash = get_hash(r2.text)
+
+print(f_hash)
+print(l_hash)
+print(f_hash == l_hash)
+print(r2.text == response.text)
+
+#print(check_duplicate(conn, response.text, "https://e-uprava.gov.si/it/javne-evidence.html"))

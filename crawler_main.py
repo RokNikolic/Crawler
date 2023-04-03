@@ -32,7 +32,6 @@ bad_response_count = 0
 
 # list of domains we want to visit
 visit_domains = ["https://gov.si", "https://evem.gov.si", "https://e-uprava.gov.si", "https://e-prostor.gov.si"]
-
 # Options for the selenium browser
 option = webdriver.ChromeOptions()
 option.add_argument('--headless')
@@ -192,7 +191,7 @@ def request_page(url, web_driver=None):
     elif response.ok and response.content and "text/html" in response.headers["content-type"]:
         page_raw['html_content'] = response.text
         # Check if we need to use selenium
-        if len(response.text) < 30000:
+        if len(response.text) < 25000:
             crawl_logger.warning(f"Using selenium, use count: {selenium_count}")
             # Use selenium
             selenium_response = request_with_selenium(url, web_driver=web_driver)
