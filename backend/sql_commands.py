@@ -151,7 +151,7 @@ class DBManager:
             ON CONFLICT DO NOTHING;
             """, (url, image_json['filename'], image_json['content_type'], image_json['data'],
                   image_json['accessed_time']))
-            print(f"{datetime.datetime.now()} Finished Image insert for {url}")
+            #print(f"{datetime.datetime.now()} Finished Image insert for {url}")
 
     @staticmethod
     def insert_page_data(conn, page_data_json, url):
