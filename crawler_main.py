@@ -360,8 +360,7 @@ class Crawler(threading.Thread):
         stime = time.thread_time()
         while time.thread_time() - stime < runtime:
             try:
-                #self.process_next()
-                break
+                self.process_next()
             except Exception as er:
                 crawl_logger.exception(f"Error: {er}")
                 break
