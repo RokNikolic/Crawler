@@ -413,7 +413,7 @@ if __name__ == '__main__':
         crawlers.append(crawler)
         crawler.start()
 
-    print("Crawlers started")
+    crawl_logger.info("Crawlers started")
     # Run crawlers for a set time
     time_start = time.perf_counter()
     time_dif = time_start - time.perf_counter()
