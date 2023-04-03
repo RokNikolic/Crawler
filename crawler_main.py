@@ -44,9 +44,9 @@ crawl_logger = logging.getLogger('crawler_logger')
 
 stream_handler = logging.StreamHandler()
 stream_handler.setLevel(logging.DEBUG)
-file_handler = logging.FileHandler('main_log.log')
+file_handler = logging.FileHandler(f'info_log_{datetime.datetime.now()}.log')
 file_handler.setLevel(logging.WARNING)
-error_handler = logging.FileHandler('error_log.log')
+error_handler = logging.FileHandler(f'error_log_{datetime.datetime.now()}.log')
 error_handler.setLevel(logging.ERROR)
 
 formatter1 = logging.Formatter('%(asctime)s - %(message)s')
@@ -56,6 +56,7 @@ error_handler.setFormatter(formatter1)
 
 crawl_logger.addHandler(stream_handler)
 crawl_logger.addHandler(file_handler)
+crawl_logger.addHandler(error_handler)
 
 
 def format_page_data(header):
@@ -350,7 +351,7 @@ class Crawler(threading.Thread):
                 self.process_next()
             except Exception as er:
                 crawl_logger.exception(f"Error: {er}")
-                continue
+                break
 
 
 if __name__ == '__main__':
