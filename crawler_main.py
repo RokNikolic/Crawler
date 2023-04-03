@@ -16,9 +16,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from backend.sql_commands import DBManager
 
-
 # TODO: Add site domains for each seed into DB
-
 
 # GLOBALS
 USERAGENT = "fri-wier-threadripercki"
@@ -258,7 +256,6 @@ def parse_page(page_raw, base_url, conn):
         found_src = img.get('src')
         if found_src is not None:
             src_full = urljoin(base_url, found_src)
-            content_type = ""
 
             # Check if src_full is data:image
             if re.match(r"data:image", src_full):
@@ -401,7 +398,7 @@ if __name__ == '__main__':
     time_start = time.perf_counter()
     time_dif = time_start - time.perf_counter()
 
-    run_time = (3*60)  # In minutes
+    run_time = (4*60)  # In minutes
     while time_dif < (run_time * 60):
         time.sleep(1)
         time_dif = time.perf_counter() - time_start
