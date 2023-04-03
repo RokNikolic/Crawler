@@ -21,7 +21,7 @@ from backend.sql_commands import DBManager
 
 
 # GLOBALS
-USERAGENT = "fri-wier-GROUP_NAME"
+USERAGENT = "fri-wier-threadripercki"
 headers = {'User-Agent': USERAGENT}
 
 frontier = Queue()      # urls to be visited
@@ -71,7 +71,8 @@ def format_page_data(header):
         return "PPTX"
     else:
         # Regex to extract just the file type from Content-Type header
-        return re.search(r"/(.*)", header).group(1).upper()
+        data_type = re.search(r"/(.*)", header).group(1).upper()
+        return data_type[:20]
 
 
 def get_hash(page_content):
@@ -110,7 +111,7 @@ def add_to_frontier(url):
     return False
 
 
-def request_page(url):
+def request_page(url, web_driver=None):
     """Fetches page at url and returns HTML content and metadata as dict."""
 
     domain = urlparse(url).netloc
@@ -195,7 +196,7 @@ def request_page(url):
         if len(response.text) < 30000:
             crawl_logger.warning(f"Using selenium, use count: {selenium_count}")
             # Use selenium
-            selenium_response = request_with_selenium(url)
+            selenium_response = request_with_selenium(url, web_driver=web_driver)
             page_raw['html_content'] = selenium_response
             selenium_count += 1  # Count selenium uses
         page_raw["page_type_code"] = "HTML"
@@ -256,6 +257,7 @@ def parse_page(page_raw, base_url, conn):
         found_src = img.get('src')
         if found_src is not None:
             src_full = urljoin(base_url, found_src)
+            content_type = ""
 
             # Check if src_full is data:image
             if re.match(r"data:image", src_full):
@@ -293,18 +295,17 @@ def parse_page(page_raw, base_url, conn):
     return page_obj
 
 
-def request_with_selenium(url):
+def request_with_selenium(url, web_driver=None):
     """Loads a page with a full web browser to parse javascript"""
-
-    # Get and create the selenium browser object
-    service = Service(r'\web_driver\chromedriver.exe')
-    browser = webdriver.Chrome(service=service, options=option)
 
     # Crawler should wait for 5 seconds before requesting the page again
     time.sleep(5)
 
-    browser.get(url)
-    page = browser.page_source
+    if web_driver is None:
+        web_driver = webdriver.Chrome()
+
+    web_driver.get(url)
+    page = web_driver.page_source
     return page
 
 
@@ -331,12 +332,13 @@ class Crawler(threading.Thread):
         self.conn = conn
         self.daemon = True
         self.stop_event = stop_event
+        self.web_driver = webdriver.Chrome(service=Service(r'\web_driver\chromedriver.exe'), options=option)
 
     def process_next(self):
         """Fetches, parses and saves next page from frontier."""
 
         url = get_url_from_frontier()
-        page_raw, site_data = request_page(url)
+        page_raw, site_data = request_page(url, web_driver=self.web_driver)
         page_obj = parse_page(page_raw, url, self.conn)
         save_to_db(page_obj, site_data, self.conn, self.threadID)
 
