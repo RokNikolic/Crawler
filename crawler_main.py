@@ -9,14 +9,13 @@ import hashlib
 from queue import Queue
 import logging
 import dill
+import keyboard
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from backend.sql_commands import DBManager
-
-# TODO: Add site domains for each seed into DB
 
 # GLOBALS
 USERAGENT = "fri-wier-threadripercki"
@@ -110,7 +109,7 @@ def add_to_frontier(url):
     return False
 
 
-def request_page(url, web_driver=None):
+def request_page(url, web_driver=None, threadID=0):
     """Fetches page at url and returns HTML content and metadata as dict."""
 
     domain = urlparse(url).netloc
@@ -169,7 +168,7 @@ def request_page(url, web_driver=None):
         return None, site_data
 
     # Make a GET request
-    crawl_logger.info(f"Fetching {url}")
+    crawl_logger.info(f"Thread {threadID} Fetching {url}")
     req_time = time.perf_counter()
     response = requests.get(url, headers, stream=True)
 
@@ -186,44 +185,42 @@ def request_page(url, web_driver=None):
     # Check if we got redirected and if we already crawled the redirect url
     if response.history and response.url != url:
         # If we got redirected and url was already crawled, mark page as duplicate
-        crawl_logger.info("Already crawled redirect url")
+        crawl_logger.info(f"Thread {threadID} Already crawled redirect url {response.url}")
         page_raw["page_type_code"] = "DUPLICATE"
         page_raw["duplicate_url"] = response.url
-        crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
 
         # If we got redirected and url was not yet crawled, add it to frontier
         if response.url not in crawled_urls:
-            crawl_logger.info("Redirected to new url")
+            crawl_logger.info(f"Thread {threadID} Redirected to new url {response.url}")
             add_to_frontier(response.url)
 
     elif response.ok and response.content and "text/html" in response.headers["content-type"]:
         page_raw['html_content'] = response.text
         # Check if we need to use selenium
         if len(response.text) < 25000:
-            crawl_logger.warning(f"Using selenium, use count: {selenium_count}")
+            crawl_logger.warning(f"Thread {threadID} Using selenium, use count: {selenium_count}")
             # Use selenium
             selenium_response = request_with_selenium(url, web_driver=web_driver)
             page_raw['html_content'] = selenium_response
             selenium_count += 1  # Count selenium uses
         page_raw["page_type_code"] = "HTML"
         page_raw["hashcode"] = get_hash(page_raw["html_content"])
-        crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
-        crawl_logger.warning(f"Amount of crawled urls: {len(crawled_urls)}")
     elif response.ok and response.content:
         page_raw["page_type_code"] = "BINARY"
         page_raw["page_data"] = {
             "data_type_code": format_page_data(response.headers["content-type"]),
             "data": None
         }
-        crawled_urls.add(re.sub(r"/*([?#].*)?$", "", url))
     else:
         bad_response_count += 1
-        crawl_logger.warning(f"Response not ok, count: {bad_response_count}")
+        crawl_logger.warning(f"Thread {threadID} Response not ok, count: {bad_response_count}")
 
         # If response not ok, we must store a page_raw with only url and http_status_code
         page_raw["http_status_code"] = response.status_code
         page_raw["page_type_code"] = "HTML"
-        return page_raw, site_data
+
+    crawled_urls.add(url)
+    crawl_logger.warning(f"Thread {threadID} Amount of crawled urls: {len(crawled_urls)} Last crawled url: {url}")
 
     return page_raw, site_data
 
@@ -344,6 +341,7 @@ class Crawler(threading.Thread):
         self.frontier = frontier_in
         self.conn = conn
         self.daemon = True
+        self.stop_event = stop_event
         self.web_driver = webdriver.Chrome(service=Service(r'\web_driver\chromedriver.exe'), options=option)
 
     def process_next(self):
@@ -356,14 +354,14 @@ class Crawler(threading.Thread):
 
     def run(self):
         """Continuously processes pages from frontier."""
-        runtime = 60 * 180  # 3 hours
-        stime = time.thread_time()
-        while time.thread_time() - stime < runtime:
-            try:
-                self.process_next()
-            except Exception as er:
-                crawl_logger.exception(f"Error: {er}")
-                break
+        while not self.stop_event.is_set():
+            time.sleep(1)
+            # try:
+            #     #self.process_next()
+            #     #break
+            # except Exception as er:
+            #     crawl_logger.exception(f"Error: {er}")
+            #     break
 
 
 if __name__ == '__main__':
@@ -409,30 +407,29 @@ if __name__ == '__main__':
         crawlers.append(crawler)
         crawler.start()
 
-    print("Crawlers started!")
+    print("Crawlers started")
+    # Run crawlers for a set time
+    time_start = time.perf_counter()
+    time_dif = time_start - time.perf_counter()
 
-    for crawler in crawlers:
-        crawler.join()
+    run_time = (3*60)  # In minutes
+    while time_dif < (run_time * 60):
+        time.sleep(1)
+        time_dif = time.perf_counter() - time_start
 
-    print("Crawlers finished!")
+        # Check if all threads are still alive
+        any_crawler_alive = any(crawler.is_alive() for crawler in crawlers)
+        if not any_crawler_alive:
+            crawl_logger.warning("All crawlers dead, stopping crawlers")
+            break
 
-    # # Run crawlers for a set time
-    # time_start = time.perf_counter()
-    # time_dif = time_start - time.perf_counter()
-    #
-    # run_time = (4*60)  # In minutes
-    # while time_dif < (run_time * 60):
-    #     time.sleep(1)
-    #     time_dif = time.perf_counter() - time_start
-    #
-    #     # Check if all threads are still alive
-    #     any_crawler_alive = any(crawler.is_alive() for crawler in crawlers)
-    #     print(any_crawler_alive)
-    #     if not any_crawler_alive:
-    #         break
-    #
-    # # Stopping the threads with event setting
-    # event.set()
+        # Check if ESC was pressed
+        if keyboard.is_pressed('esc'):
+            crawl_logger.warning("ESC pressed, stopping crawlers")
+            break
+
+    # Stopping the threads with event setting
+    event.set()
 
     # Store variables frontier and crawled_urls
     with open('checkpoint.pkl', 'wb') as f:

@@ -132,9 +132,9 @@ class DBManager:
             WHERE url = %s
             """, (page_json['domain'], page_json['page_type_code'], page_json['html_content'], page_json['hashcode'],
                   page_json['http_status_code'], page_json['accessed_time'], page_json['url'][:3000]))
-            print(f"{datetime.datetime.now()} Finished Page insert for {page_json['url']}")
-        else:
-            print(f"{datetime.datetime.now()} Page already exists and filled.")
+            #print(f"{datetime.datetime.now()} Finished Page insert for {page_json['url']}")
+        #else:
+            #print(f"{datetime.datetime.now()} Page already exists and filled.")
 
 
     @staticmethod
@@ -174,7 +174,7 @@ class DBManager:
                 %s, %s)
             ON CONFLICT DO NOTHING;
             """, (url, page_data_json['data_type_code'], page_data_json['data']))
-            print(f"{datetime.datetime.now()} Finished PageData insert for {url}")
+            #print(f"{datetime.datetime.now()} Finished PageData insert for {url}")
 
     @staticmethod
     def insert_link(conn, link_json, logging=None):
