@@ -4,7 +4,10 @@ import socket
 import time
 import os
 import threading
+from collections import deque
+
 import requests
+import urllib3
 import hashlib
 from queue import Queue
 import logging
@@ -16,6 +19,8 @@ from urllib.robotparser import RobotFileParser
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from backend.sql_commands import DBManager
+
+urllib3.disable_warnings()
 
 # GLOBALS
 USERAGENT = "fri-wier-threadripercki"
@@ -69,8 +74,13 @@ def format_page_data(header):
         return "PPTX"
     else:
         # Regex to extract just the file type from Content-Type header
-        data_type = re.search(r"/(.*)", header).group(1).upper()
+        data_type = re.search(r"/(.*);?", header).group(1).upper()
         return data_type[:20]
+
+
+def add_to_crawled_urls(url):
+    url = re.sub(r"/*([?#].*)?$", "", url)
+    crawled_urls.add(url)
 
 
 def get_hash(page_content):
@@ -82,6 +92,8 @@ def get_hash(page_content):
 
 def check_duplicate(conn, page_content, url):
     """Check if page is a duplicate of another."""
+    if page_content is None:
+        return False
     page_hash = get_hash(page_content)
     t = DBManager.check_if_page_exists(conn, page_hash, url)
     return t
@@ -100,12 +112,11 @@ def add_urls_to_frontier(links):
 def add_to_frontier(url):
     # Removes query elements and anchor elements from url
     clean_url = re.sub(r"/*([?#].*)?$", "", url)
-    if clean_url not in crawled_urls:
-        # Checks if url fits into our domain constraints
-        for domain in visit_domains:
-            if domain in clean_url:
-                frontier.put(clean_url)
-                return True
+    if clean_url not in crawled_urls and clean_url not in frontier.queue:
+        # Checks if url contains gov.si
+        if "gov.si" in url:
+            frontier.put(clean_url)
+            return True
     return False
 
 
@@ -140,14 +151,20 @@ def request_page(url, web_driver=None, threadID=0):
 
     else:
         # Save robots.txt rules for new domain
+        robots_response = ""
         rp = RobotFileParser()
-        robots_url = urljoin(url, domain) + "/robots.txt"
-        rp.set_url(robots_url)
-        rp.read()
-        domain_rules[domain] = rp
+        robots_url = urljoin(url, "robots.txt")
+        robots_error = False
+        try:
+            robots_response = requests.get(robots_url, headers, verify=False, stream=True)
+            rp.parse(robots_response.text.splitlines())
+            domain_rules[domain] = rp
+        except Exception as e:
+            crawl_logger.error(f"Thread {threadID} Error fetching robots.txt: {url.encode('utf-8')}")
+            add_to_crawled_urls(url)
+            robots_error = True
 
         # Make site info dict with robots.txt and sitemap contents
-        robots_content = requests.get(robots_url, headers).text
         sitemap_urls = rp.site_maps()
         if sitemap_urls is None:
             sitemap_content = None
@@ -155,56 +172,71 @@ def request_page(url, web_driver=None, threadID=0):
             sitemap_content = requests.get(sitemap_urls[0], headers).text
         site_data = {
             "domain": domain,
-            "robots": robots_content,
+            "robots": robots_response.text if not robots_error else "",
             "sitemap": sitemap_content
         }
+
+        if robots_error:
+            bad_response_count += 1
+            crawl_logger.warning(f"Thread {threadID} Response not ok, count: {bad_response_count}")
+
+            # If response not ok, we must store a page_raw with only url and http_status_code
+            page_raw["http_status_code"] = 400
+            page_raw["page_type_code"] = "HTML"
+            return page_raw, site_data
 
     # If URL is disallowed by robots.txt, don't fetch
     if not domain_rules[domain].can_fetch(USERAGENT, url):
         return None, site_data
 
-    # # If URL does not contain gov.si don't fetch
-    if "gov.si" not in url:
-        return None, site_data
-
     # Make a GET request
     crawl_logger.info(f"Thread {threadID} Fetching {url}")
     req_time = time.perf_counter()
-    response = requests.get(url, headers, stream=True)
+
+    try:
+        response = requests.get(url, headers, stream=True, verify=False)
+    except Exception as e:
+        crawl_logger.error(f"Thread {threadID} Error fetching page: {url}")
+        add_to_crawled_urls(url)
+        return None, site_data
 
     # Save server IP and request time
-    if socket.gethostbyname(domain):
-        ip = socket.gethostbyname(domain)
-        if domain not in domain_ips:
-            domain_ips[domain] = ip
-        ip_last_visits[ip] = req_time
+    try:
+        if socket.gethostbyname(domain):
+            ip = socket.gethostbyname(domain)
+            if domain not in domain_ips:
+                domain_ips[domain] = ip
+            ip_last_visits[ip] = req_time
+    except Exception as e:
+        pass
 
     page_raw["accessed_time"] = req_time
     page_raw["http_status_code"] = response.status_code
 
     # Check if we got redirected and if we already crawled the redirect url
-    if response.history and response.url != url:
+    if response.history and re.sub(r"/*([?#].*)?$", "", response.url) != url:
         # If we got redirected and url was already crawled, mark page as duplicate
         crawl_logger.info(f"Thread {threadID} Already crawled redirect url {response.url}")
         page_raw["page_type_code"] = "DUPLICATE"
-        page_raw["duplicate_url"] = response.url
+        page_raw["duplicate_url"] = re.sub(r"/*([?#].*)?$", "", response.url)
 
         # If we got redirected and url was not yet crawled, add it to frontier
-        if response.url not in crawled_urls:
+        if re.sub(r"/*([?#].*)?$", "", response.url) not in crawled_urls:
             crawl_logger.info(f"Thread {threadID} Redirected to new url {response.url}")
             add_to_frontier(response.url)
 
-    elif response.ok and response.content and "text/html" in response.headers["content-type"]:
+    elif response.ok and response.content and "text/html" in response.headers.get("content-type", ""):
         page_raw['html_content'] = response.text
         # Check if we need to use selenium
         if len(response.text) < 25000:
             crawl_logger.warning(f"Thread {threadID} Using selenium, use count: {selenium_count}")
             # Use selenium
-            selenium_response = request_with_selenium(url, web_driver=web_driver)
+            selenium_response = request_with_selenium(url, web_driver=web_driver, threadID=threadID)
             page_raw['html_content'] = selenium_response
+            page_raw["http_status_code"] = 200 if selenium_response else 404
             selenium_count += 1  # Count selenium uses
         page_raw["page_type_code"] = "HTML"
-        page_raw["hashcode"] = get_hash(page_raw["html_content"])
+        page_raw["hashcode"] = get_hash(page_raw["html_content"]) if page_raw["html_content"] else None
     elif response.ok and response.content:
         page_raw["page_type_code"] = "BINARY"
         page_raw["page_data"] = {
@@ -219,8 +251,8 @@ def request_page(url, web_driver=None, threadID=0):
         page_raw["http_status_code"] = response.status_code
         page_raw["page_type_code"] = "HTML"
 
-    crawled_urls.add(url)
-    crawl_logger.warning(f"Thread {threadID} Amount of crawled urls: {len(crawled_urls)} Last crawled url: {url}")
+    add_to_crawled_urls(url)
+    crawl_logger.warning(f"Thread {threadID} Amount of crawled urls: {len(crawled_urls)} Last crawled url: {url.encode('utf-8')}")
 
     return page_raw, site_data
 
@@ -259,9 +291,10 @@ def parse_page(page_raw, base_url, conn):
     # Find the urls in page
     for link in soup.select('a'):
         found_link = link.get('href')
-        to = urljoin(base_url, found_link)
-        clean_to = re.sub(r"/*([?#].*)?$", "", to)
-        page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
+        if found_link and not found_link.startswith("mailto:"):
+            to = urljoin(base_url, found_link)
+            clean_to = re.sub(r"/*([?#].*)?$", "", to)
+            page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
 
     # Find the images in page (<img> tags)
     for img in soup.select('img'):
@@ -271,11 +304,10 @@ def parse_page(page_raw, base_url, conn):
 
             # Check if src_full is data:image
             if re.match(r"data:image", src_full):
-                content_type = re.match(r"(data:image/.*;.*),", src_full).group(1)
-                src_full = "BINARY DATA"
-            elif len(src_full) >= 255:
-                # If src is too long, don't save it
-                content_type = ""
+                content_type = re.match(r"(data:image/.*;\s*.*),", src_full).group(1)
+                if len(content_type) >= 255:
+                    # If content_type is too long, don't save it
+                    content_type = ""
                 src_full = "BINARY DATA"
             else:
                 content_type = os.path.splitext(src_full)[1]
@@ -293,29 +325,33 @@ def parse_page(page_raw, base_url, conn):
         found_link = tag.get('onclick')
         if found_link is not None:
             # Find the url in the onclick attribute
-            valid_links = re.findall(r"(?i)\b(?:(?:https?|ftp)://|www\.|/)\S+\b", found_link)
+            valid_links = re.findall(r"(?i)\b(?:(?:https?)://|www\.|/)\S+\b", found_link)
             for link in valid_links:
-                if link is not None:
+                if link is not None and not link.startswith("mailto:"):
                     found_link = link
                     to = urljoin(base_url, found_link)
                     clean_to = re.sub(r"/*([?#].*)?$", "", to)
                     page_obj['urls'].append({"from_page": base_url, "to_page": clean_to})
-                    # crawl_logger.info(f"Found link in onclick attribute: {clean_to}")
+                    crawl_logger.info(f"Found link in onclick attribute: {clean_to.encode('utf-8')}")
 
     return page_obj
 
 
-def request_with_selenium(url, web_driver=None):
+def request_with_selenium(url, web_driver=None, threadID=0):
     """Loads a page with a full web browser to parse javascript"""
 
     # Crawler should wait for 5 seconds before requesting the page again
     time.sleep(5)
 
     if web_driver is None:
-        web_driver = webdriver.Chrome()
+        web_driver = webdriver.Chrome(service=Service(r'\web_driver\chromedriver.exe'), options=option)
 
-    web_driver.get(url)
-    page = web_driver.page_source
+    try:
+        web_driver.get(url)
+        page = web_driver.page_source
+    except Exception as e:
+        crawl_logger.warning(f"Thread {threadID} Could not fetch: {e}")
+        page = None
     return page
 
 
@@ -380,6 +416,8 @@ if __name__ == '__main__':
         for domain_url in visit_domains:
             add_to_frontier(domain_url)
 
+    crawled_urls = set(crawled_urls)
+
     # Init base domains
     for page_url in frontier.queue:
         domain_rules[page_url] = None
@@ -410,7 +448,7 @@ if __name__ == '__main__':
     time_start = time.perf_counter()
     time_dif = time_start - time.perf_counter()
 
-    run_time = (3*60)  # In minutes
+    run_time = (7*60)  # In minutes
     while time_dif < (run_time * 60):
         time.sleep(1)
         time_dif = time.perf_counter() - time_start

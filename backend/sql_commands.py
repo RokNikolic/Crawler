@@ -149,9 +149,9 @@ class DBManager:
                 (SELECT id from crawldb.page WHERE url = %s), 
                 %s, %s, %s, to_timestamp(%s))
             ON CONFLICT DO NOTHING;
-            """, (url, image_json['filename'], image_json['content_type'], image_json['data'],
+            """, (url, image_json['filename'][:255], image_json['content_type'][:50], image_json['data'],
                   image_json['accessed_time']))
-            #print(f"{datetime.datetime.now()} Finished Image insert for {url}")
+            # print(f"{datetime.datetime.now()} Finished Image insert for {url}")
 
     @staticmethod
     def insert_page_data(conn, page_data_json, url):
@@ -174,7 +174,7 @@ class DBManager:
                 %s, %s)
             ON CONFLICT DO NOTHING;
             """, (url, page_data_json['data_type_code'], page_data_json['data']))
-            #print(f"{datetime.datetime.now()} Finished PageData insert for {url}")
+            # print(f"{datetime.datetime.now()} Finished PageData insert for {url}")
 
     @staticmethod
     def insert_link(conn, link_json, logging=None):
