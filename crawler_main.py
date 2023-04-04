@@ -74,6 +74,10 @@ def format_page_data(header):
         return "PPTX"
     else:
         # Regex to extract just the file type from Content-Type header
+        if header is None or header == "":
+            return ""
+        if re.search(r"/(.*);?", header) is None:
+            return ""
         data_type = re.search(r"/(.*);?", header).group(1).upper()
         return data_type[:20]
 
@@ -126,8 +130,8 @@ def request_page(url, web_driver=None, threadID=0):
     domain = urlparse(url).netloc
     site_data = None    # Parsed SITE metadata
     page_raw = {
-        "html_content": "",
-        "hashcode": "",
+        "html_content": None,
+        "hashcode": None,
         "page_type_code": "HTML",
         "domain": domain,
         "url": url,
@@ -153,7 +157,7 @@ def request_page(url, web_driver=None, threadID=0):
         # Save robots.txt rules for new domain
         robots_response = ""
         rp = RobotFileParser()
-        robots_url = urljoin(url, "robots.txt")
+        robots_url = urljoin(domain, "robots.txt")
         robots_error = False
         try:
             robots_response = requests.get(robots_url, headers, verify=False, stream=True)
@@ -240,7 +244,7 @@ def request_page(url, web_driver=None, threadID=0):
     elif response.ok and response.content:
         page_raw["page_type_code"] = "BINARY"
         page_raw["page_data"] = {
-            "data_type_code": format_page_data(response.headers["content-type"]),
+            "data_type_code": format_page_data(response.headers.get("content-type", "")),
             "data": None
         }
     else:
@@ -443,7 +447,7 @@ if __name__ == '__main__':
         crawlers.append(crawler)
         crawler.start()
 
-    print("Crawlers started")
+    crawl_logger.info("Crawlers started")
     # Run crawlers for a set time
     time_start = time.perf_counter()
     time_dif = time_start - time.perf_counter()
