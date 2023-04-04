@@ -195,7 +195,7 @@ def request_page(url, web_driver=None, threadID=0):
 
     # Make a GET request
     crawl_logger.info(f"Thread {threadID} Fetching {url}")
-    req_time = time.perf_counter()
+    req_time = time.time()
 
     try:
         response = requests.get(url, headers, stream=True, verify=False)
