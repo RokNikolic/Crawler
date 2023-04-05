@@ -4,8 +4,6 @@ import socket
 import time
 import os
 import threading
-from collections import deque
-
 import requests
 import urllib3
 import hashlib
@@ -163,8 +161,9 @@ def request_page(url, web_driver=None, threadID=0):
             robots_response = requests.get(robots_url, headers, verify=False, stream=True)
             rp.parse(robots_response.text.splitlines())
             domain_rules[domain] = rp
-        except Exception as e:
+        except Exception as er:
             crawl_logger.error(f"Thread {threadID} Error fetching robots.txt: {url.encode('utf-8')}")
+            crawl_logger.exception(er)
             add_to_crawled_urls(url)
             robots_error = True
 
@@ -199,8 +198,9 @@ def request_page(url, web_driver=None, threadID=0):
 
     try:
         response = requests.get(url, headers, stream=True, verify=False)
-    except Exception as e:
-        crawl_logger.error(f"Thread {threadID} Error fetching page: {url}")
+    except Exception as er:
+        crawl_logger.exception(f"Thread {threadID} Error fetching page: {url}")
+        crawl_logger.exception(er)
         add_to_crawled_urls(url)
         return None, site_data
 
@@ -211,7 +211,8 @@ def request_page(url, web_driver=None, threadID=0):
             if domain not in domain_ips:
                 domain_ips[domain] = ip
             ip_last_visits[ip] = req_time
-    except Exception as e:
+    except Exception as er:
+        crawl_logger.exception(er)
         pass
 
     page_raw["accessed_time"] = req_time
@@ -353,8 +354,8 @@ def request_with_selenium(url, web_driver=None, threadID=0):
     try:
         web_driver.get(url)
         page = web_driver.page_source
-    except Exception as e:
-        crawl_logger.warning(f"Thread {threadID} Could not fetch: {e}")
+    except Exception as er:
+        crawl_logger.warning(f"Thread {threadID} Could not fetch: {er}")
         page = None
     return page
 
