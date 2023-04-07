@@ -7,7 +7,7 @@
 For Docker
 
 ```shell
-cd db
+cd crawler/db
 docker-compose up
 ```
 
@@ -16,6 +16,7 @@ For Python
 ```python
 python -m venv venv
 ./venv/Scripts/activate
+cd crawler
 pip install -r requirements.txt
-python crawler_main.py
+python crawler/crawler_main.py
 ```
