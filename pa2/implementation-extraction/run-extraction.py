@@ -7,7 +7,7 @@ from RoadRunner import rtv_with_road_runner, overstock_with_road_runner
 
 # Get arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("--method", default="A")
+parser.add_argument("--method", default="a")
 args = parser.parse_args()
 
 # Get RTV pages
@@ -29,32 +29,34 @@ for file in os.listdir(r"..\input-extraction\overstock"):
 
 if __name__ == '__main__':
     if args.method == "A" or args.method == "a":
-        for page in list_of_rtv_pages:
+        for i, page in enumerate(list_of_rtv_pages):
             json = rtv_with_regex(page)
-            print(f"Regex RTV: {json}")
+            print(f"RTV page {i} with Regex: {json}")
 
-        for page in list_of_overstock_pages:
+        for i, page in enumerate(list_of_overstock_pages):
             json = overstock_with_regex(page)
-            print(f"Regex Overstock: {json}")
+            print(f"Overstock page {i} with Regex: {json}")
 
     elif args.method == "B" or args.method == "b":
-        for page in list_of_rtv_pages:
+        for i, page in enumerate(list_of_rtv_pages):
             json = rtv_with_xpath(page)
-            print(f"XPath RTV: {json}")
+            print(f"RTV page {i} with XPath: {json}")
 
-        for page in list_of_overstock_pages:
+        for i, page in enumerate(list_of_overstock_pages):
             json = overstock_with_xpath(page)
-            print(f"XPath Overstock: {json}")
+            print(f"Overstock page {i} with XPath: {json}")
 
     elif args.method == "C" or args.method == "c":
-        for page in list_of_rtv_pages:
+        for i, page in enumerate(list_of_rtv_pages):
             json = rtv_with_road_runner(page)
-            print(f"RoadRunner RTV: {json}")
+            print(f"RTV page {i} with RoadRunner: {json}")
 
-        for page in list_of_overstock_pages:
+        for i, page in enumerate(list_of_overstock_pages):
             json = overstock_with_road_runner(page)
-            print(f"RoadRunner Overstock: {json}")
+            print(f"Overstock page {i} with RoadRunner: {json}")
 
     else:
         print("Bad argument, this program only excepts the following arguments: \n"
-              "'A' or 'a' for Regex, 'B' or 'b' for XPath and 'C' or 'c' for RoadRunner extraction")
+              "'A' or 'a' for Regex, 'B' or 'b' for XPath and 'C' or 'c' for RoadRunner extraction, \n"
+              "you must also use the --method flag to input these arguments in this manor: \n"
+              "python run-extraction.py --method A")
