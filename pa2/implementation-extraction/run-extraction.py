@@ -12,17 +12,17 @@ args = parser.parse_args()
 
 # Get RTV pages
 list_of_rtv_pages = []
-for file in os.listdir(r"..\input-extraction\rtv"):
+for file in os.listdir(os.path.join(os.getcwd(), '..', 'input-extraction', 'rtv')):
     if file.endswith(".html"):
-        with open(rf"..\input-extraction\rtv\{file}", "r", encoding="utf-8") as f:
+        with open(os.path.join(os.getcwd(), '..', 'input-extraction', 'rtv', f'{file}'), "r", encoding="utf-8") as f:
             html = f.read()
             list_of_rtv_pages.append(html)
 
 # Get Overstock pages
 list_of_overstock_pages = []
-for file in os.listdir(r"..\input-extraction\overstock"):
+for file in os.listdir(os.path.join(os.getcwd(), '..', 'input-extraction', 'overstock')):
     if file.endswith(".html"):
-        with open(rf"..\input-extraction\overstock\{file}", "r") as f:
+        with open(os.path.join(os.getcwd(), '..', 'input-extraction', 'overstock', f'{file}'), "r", encoding='windows-1252') as f:
             html = f.read()
             list_of_overstock_pages.append(html)
 
