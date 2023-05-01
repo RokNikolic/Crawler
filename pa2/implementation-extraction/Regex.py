@@ -5,7 +5,7 @@ import json
 def rtv_with_regex(html_to_extract):
     html_to_extract = re.sub('\n', ' ', html_to_extract)
 
-    title_match = re.search(r'<title>\s*(.+?)\s*</title>', html_to_extract)
+    title_match = re.search(r'<h1>\s*(.+?)\s*</h1>', html_to_extract)
     title = None
     if title_match:
         title = title_match.group(1)
