@@ -57,10 +57,14 @@ def overstock_with_regex(html_to_extract):
 
     contents = re.findall(r'<span class="normal">\s*(.+?)\s*<br>', html_to_extract)
 
-    return json.dumps({"titles": titles,
-                       "list_price": list_prices,
-                       "price": prices,
-                       "saving": savings,
-                       "saving_percent": saving_percent,
-                       "content": contents
-                       }, ensure_ascii=False)
+    data = []
+    for i in range(len(titles)):
+        data.append({
+            "title": titles[i],
+            "list_price": list_prices[i],
+            "price": prices[i],
+            "saving": savings[i],
+            "saving_percent": saving_percent[i],
+            "content": contents[i]
+        })
+    return json.dumps(data, ensure_ascii=False)
