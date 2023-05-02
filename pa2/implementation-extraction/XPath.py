@@ -32,17 +32,23 @@ def overstock_with_xpath(html_to_extract):
     # Parse the HTML using lxml
     root = etree.HTML(html_to_extract)
 
-    titles = root.xpath('//a//b/text()')
+    titles = root.xpath('//td[@valign]/a/b/text()')
 
-    list_prices = None
+    list_prices = root.xpath('//td[@align="left" and @nowrap="nowrap"]/s/text()')
 
-    prices = None
+    prices = root.xpath('//td[@align="left" and @nowrap="nowrap"]/span[@class="bigred"]/b/text()')
 
-    savings = None
+    savings = root.xpath('//td[@align="left" and @nowrap="nowrap"]/span[@class="littleorange"]/text()')
+    for i, item in enumerate(savings):
+        savings[i] = item.split()[0]
 
-    saving_percent = None
+    saving_percent = root.xpath('//td[@align="left" and @nowrap="nowrap"]/span[@class="littleorange"]/text()')
+    for i, item in enumerate(saving_percent):
+        saving_percent[i] = item.split()[1]
 
-    contents = None
+    contents = root.xpath('//td[@valign="top"]/span[@class="normal"]/text()')
+    for i, item in enumerate(contents):
+        contents[i] = item.replace('\n', '')
 
     return json.dumps({"titles": titles,
                        "list_price": list_prices,

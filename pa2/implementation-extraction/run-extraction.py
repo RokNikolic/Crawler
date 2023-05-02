@@ -7,22 +7,26 @@ from RoadRunner import create_site_wrapper
 
 # Get arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("--method", default="a")
+parser.add_argument("--method", default="b")
 args = parser.parse_args()
 
 # Get RTV pages
 list_of_rtv_pages = []
-for file in os.listdir(os.path.join(os.getcwd(), '..', 'input-extraction', 'rtv')):
+path_to_rtv = os.path.join(os.getcwd(), '..', 'input-extraction', 'rtv')
+
+for file in os.listdir(path_to_rtv):
     if file.endswith(".html"):
-        with open(os.path.join(os.getcwd(), '..', 'input-extraction', 'rtv', f'{file}'), "r", encoding="utf-8") as f:
+        with open(os.path.join(path_to_rtv, f'{file}'), "r", encoding="utf-8") as f:
             html = f.read()
             list_of_rtv_pages.append(html)
 
 # Get Overstock pages
 list_of_overstock_pages = []
-for file in os.listdir(os.path.join(os.getcwd(), '..', 'input-extraction', 'overstock')):
+path_to_overstock = os.path.join(os.getcwd(), '..', 'input-extraction', 'overstock')
+
+for file in os.listdir(path_to_overstock):
     if file.endswith(".html"):
-        with open(os.path.join(os.getcwd(), '..', 'input-extraction', 'overstock', f'{file}'), "r", encoding='windows-1252') as f:
+        with open(os.path.join(path_to_overstock, f'{file}'), "r", encoding='windows-1252') as f:
             html = f.read()
             list_of_overstock_pages.append(html)
 
@@ -31,20 +35,20 @@ if __name__ == '__main__':
     if args.method == "A" or args.method == "a":
         for i, page in enumerate(list_of_rtv_pages):
             json = rtv_with_regex(page)
-            print(f"RTV page {i} with Regex: {json}")
+            print(f"RTV page {i} with Regex: {json} \n")
 
         for i, page in enumerate(list_of_overstock_pages):
             json = overstock_with_regex(page)
-            print(f"Overstock page {i} with Regex: {json}")
+            print(f"Overstock page {i} with Regex: {json} \n")
 
     elif args.method == "B" or args.method == "b":
         for i, page in enumerate(list_of_rtv_pages):
             json = rtv_with_xpath(page)
-            print(f"RTV page {i} with XPath: {json}")
+            print(f"RTV page {i} with XPath: {json} \n")
 
         for i, page in enumerate(list_of_overstock_pages):
             json = overstock_with_xpath(page)
-            print(f"Overstock page {i} with XPath: {json}")
+            print(f"Overstock page {i} with XPath: {json} \n")
 
     elif args.method == "C" or args.method == "c":
         json = create_site_wrapper("complex_sample")
