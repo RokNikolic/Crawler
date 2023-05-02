@@ -47,7 +47,7 @@ if __name__ == '__main__':
             print(f"Overstock page {i} with XPath: {json}")
 
     elif args.method == "C" or args.method == "c":
-        json = create_site_wrapper("rtv")
+        json = create_site_wrapper("complex_sample")
 
     else:
         print("Bad argument, this program only excepts the following arguments: \n"

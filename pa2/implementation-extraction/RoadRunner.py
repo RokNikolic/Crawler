@@ -13,7 +13,11 @@ def matching_tags(node_w, node_s):
     :param node_s: BeautifulSoup node of wrapper page
     :return: boolean value indicating if the nodes are matching tags
     """
-    return isinstance(node_w, Tag) and isinstance(node_s, Tag) and node_w.name == node_s.name
+    return isinstance(node_w, Tag) and isinstance(node_s, Tag) and \
+        (node_w.has_attr('id') and node_s.has_attr('id') and node_w['id'] == node_s['id'] or
+         node_w.has_attr('class') and node_s.has_attr('class') and node_w['class'] == node_s['class'] or
+         node_w.name == node_s.name and not node_w.has_attr('id') and not node_w.has_attr('id') or
+         "roadrunner_optional" in node_w.attrs or "roadrunner_optional" in node_s.attrs)
 
 
 def recurisve_match(node_w, node_s):
@@ -25,7 +29,7 @@ def recurisve_match(node_w, node_s):
     """
     if isinstance(node_w, NavigableString) and isinstance(node_s, NavigableString):
         return node_w == node_s or node_w == "#PCDATA"
-    elif not matching_tags(node_w, node_s) and "roadrunner_optional" not in node_w.attrs:
+    elif not matching_tags(node_w, node_s):
         return False
     elif matching_tags(node_w, node_s):
         matching = True
@@ -64,8 +68,8 @@ def discover_tag_iterators(node_list_w, node_list_s, i):
         initial_node = node_list_w[i]
 
         # Find the first node in the wrapper that matches the initial node
-        for j in range(i, 0, -1):
-            if matching_tags(node_list_w[j], initial_node):
+        for j in range(i - 2, 0, -1):
+            if isinstance(node_list_w[j], Tag) and matching_tags(node_list_w[j], initial_node):
                 candidate_squares_wrapper.append(node_list_w[j])
                 break
 
@@ -75,8 +79,8 @@ def discover_tag_iterators(node_list_w, node_list_s, i):
         initial_node = node_list_s[i]
 
         # Find the first node in the sample that matches the initial node
-        for j in range(i, 0, -1):
-            if matching_tags(node_list_s[j], initial_node):
+        for j in range(i - 1, 0, -1):
+            if isinstance(node_list_s[j], Tag) and matching_tags(node_list_s[j], initial_node):
                 candidate_squares_sample.append(node_list_s[j])
                 break
 
@@ -86,9 +90,10 @@ def discover_tag_iterators(node_list_w, node_list_s, i):
         # Check if the square is a match
         if recurisve_match(terminal_node, candidate_square):
             found_iterator = True
+            matched_candidate = terminal_node
             break
 
-    if not matched_candidate:
+    if matched_candidate is not None:
         for candidate_square in candidate_squares_sample:
             # Check if the square is a match
             if recurisve_match(terminal_node, candidate_square):
@@ -108,7 +113,7 @@ def discover_tag_iterators(node_list_w, node_list_s, i):
                 break
             j -= 1
 
-        node_list_w = node_list_w[:j+1]
+        node_list_w = node_list_w[:j + 1]
         node_list_w.append(matched_candidate)
         matched_candidate["roadrunner_iterator"] = "()+"
         print("Found iterator: " + str(matched_candidate))
@@ -139,14 +144,22 @@ def discover_tag_optionals(node_list_w, node_list_s, i):
                 if isinstance(node_list_w[k], Tag):
                     # Create a new object property to indicate that this node is optional
                     node_list_w[k]["roadrunner_optional"] = "()?"
+                else:
+                    # If the node was not a tag, we mark it as optional data
+                    node_list_w[k] = "#OPTIONAL"
+                # Add filler nodes to sample from wrapper
+                node_list_s.insert(k, node_list_w[k])
 
             # Add optional nodes from sample
             for k in range(i, j):
                 if isinstance(node_list_s[k], Tag):
                     # Create a new object property to indicate that this node is optional
                     node_list_s[k]["roadrunner_optional"] = "()?"
-                node_list_w.insert(j + k, node_list_s[k])
-            return j + 1, node_list_w
+                else:
+                    # If the node was not a tag, we mark it as optional data
+                    node_list_s[k] = "#OPTIONAL"
+                node_list_w.insert(k, node_list_s[k])
+            return j, node_list_w
 
         # Search all previous wrapper tags that could match current sample tag
         elif j < len(node_list_s) and isinstance(node_list_s[j], Tag):
@@ -160,12 +173,20 @@ def discover_tag_optionals(node_list_w, node_list_s, i):
                     if isinstance(node_list_w[k], Tag):
                         # Create a new object property to indicate that this node is optional
                         node_list_w[k]["roadrunner_optional"] = "()?"
+                    else:
+                        # If the node was not a tag, we mark it as optional data
+                        node_list_w[k] = "#OPTIONAL"
+                    # Add filler nodes to sample from wrapper
+                    node_list_s.insert(k, node_list_w[k])
 
                 # Add all sample nodes between i and i+index to wrapper
                 for k in range(i, i + index + 1):
                     if isinstance(node_list_s[k], Tag):
                         # Create a new object property to indicate that this node is optional
                         node_list_s[k]["roadrunner_optional"] = "()?"
+                    else:
+                        # If the node was not a tag, we mark it as optional data
+                        node_list_s[k] = "#OPTIONAL"
                     node_list_w.insert(k, node_list_s[k])
 
                 index += i
@@ -181,6 +202,9 @@ def discover_tag_optionals(node_list_w, node_list_s, i):
                 for k in range(i, i + index + 1):
                     if isinstance(node_list_s[k], Tag):
                         node_list_s[k]["roadrunner_optional"] = "()?"
+                    else:
+                        # If the node was not a tag, we mark it as optional data
+                        node_list_s[k] = "#OPTIONAL"
                     node_list_w.insert(k, node_list_s[k])
 
                 index += i
@@ -191,12 +215,19 @@ def discover_tag_optionals(node_list_w, node_list_s, i):
         if isinstance(node_list_w[k], Tag):
             # Create a new object property to indicate that this node is optional
             node_list_w[k]["roadrunner_optional"] = "()?"
+        else:
+            # If the node was not a tag, we mark it as optional data
+            node_list_w[k] = "#OPTIONAL"
 
     for k in range(i, len(node_list_s)):
         if isinstance(node_list_s[k], Tag):
             # Create a new object property to indicate that this node is optional
             node_list_s[k]["roadrunner_optional"] = "()?"
-        node_list_w.append(node_list_s[k])
+            node_list_w.append(node_list_s[k])
+        else:
+            # If the node was not a tag, we mark it as optional data
+            node_list_s[k] = "#OPTIONAL"
+        index += 1
 
     return index, node_list_w
 
@@ -219,12 +250,14 @@ def run_roadrunner(node_wrapper, node_sample):
     # Create temp node copies for each child
     children_w = [el for el in node_wrapper.children]
     children_s = [el for el in node_sample.children]
-
+    if len(children_w) != len(children_s):
+        # No children
+        print("HOW")
     i = 0
     while i < len(children_w) and i < len(children_s):
         child_w = children_w[i]
         child_s = children_s[i]
-        if isinstance(child_w, Tag) and isinstance(child_s, Tag) and child_w.name == child_s.name:
+        if matching_tags(child_w, child_s):
             # Tags are the same (node already in wrapper)
             # Recursively run roadrunner on children
             run_roadrunner(child_w, child_s)
@@ -261,8 +294,23 @@ def run_roadrunner(node_wrapper, node_sample):
         if not found_iterator:
             # If iterators were not found, just add the remaining nodes to the wrapper as optionals
             for j in range(i, len(children_s)):
-                children_s[j]["roadrunner_optional"] = "()?"
+                if isinstance(children_s[j], Tag):
+                    children_s[j]["roadrunner_optional"] = "()?"
                 children_w.append(children_s[j])
+        else:
+            children_w = new_children_w
+
+    # If there are remaining nodes in the wrapper, lets try to find iterators
+    if i < len(children_w):
+        found_iterator, new_children_w = discover_tag_iterators(children_w, children_s, i)
+        if not found_iterator:
+            # If iterators were not found, just add the remaining nodes to the wrapper as optionals
+            for j in range(i, len(children_w)):
+                if isinstance(children_w[j], Tag):
+                    children_w[j]["roadrunner_optional"] = "()?"
+                else:
+                    # If the node was not a tag, we mark it as optional data
+                    children_w[j] = "#OPTIONAL"
         else:
             children_w = new_children_w
 
@@ -349,4 +397,3 @@ def create_site_wrapper(site="sample"):
 
     with open(fname, "w", encoding="utf-8") as f:
         f.write(wrapper_root.prettify())
-
