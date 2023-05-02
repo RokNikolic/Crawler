@@ -2,7 +2,7 @@ import argparse
 import os
 from Regex import rtv_with_regex, overstock_with_regex
 from XPath import rtv_with_xpath, overstock_with_xpath
-from RoadRunner import rtv_with_road_runner, overstock_with_road_runner
+from RoadRunner import create_site_wrapper
 
 
 # Get arguments
@@ -47,13 +47,7 @@ if __name__ == '__main__':
             print(f"Overstock page {i} with XPath: {json}")
 
     elif args.method == "C" or args.method == "c":
-        for i, page in enumerate(list_of_rtv_pages):
-            json = rtv_with_road_runner(page)
-            print(f"RTV page {i} with RoadRunner: {json}")
-
-        for i, page in enumerate(list_of_overstock_pages):
-            json = overstock_with_road_runner(page)
-            print(f"Overstock page {i} with RoadRunner: {json}")
+        json = create_site_wrapper("rtv")
 
     else:
         print("Bad argument, this program only excepts the following arguments: \n"

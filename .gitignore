@@ -1,6 +1,7 @@
 .idea/
 venv/
 build/
+__pycache__/
 
 
 *.xml
