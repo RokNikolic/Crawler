@@ -7,7 +7,7 @@ from RoadRunner import create_site_wrapper
 
 # Get arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("--method", default="b")
+parser.add_argument("--method", default="a")
 args = parser.parse_args()
 
 # Get RTV pages

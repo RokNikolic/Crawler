@@ -30,8 +30,8 @@ def rtv_with_regex(html_to_extract):
     if lead_match:
         lead = lead_match.group(1)
 
-    # TODO: fix content regex?
-    content = re.findall(r'<article class="article">\s*(.+?)\s*</article>', html_to_extract)
+    #TODO: fix this trash ˇ it doesnt wanna work
+    content = re.findall(r'<article class="article">.+?<p[^>]*>(.+?(?=</p>))', html_to_extract, re.DOTALL)
 
     return json.dumps({"title": title,
                        "subtitle": subtitle,

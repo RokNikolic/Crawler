@@ -16,8 +16,7 @@ def rtv_with_xpath(html_to_extract):
 
     lead = root.xpath('//p[@class="lead"]/text()')[0]
 
-    # TODO: what does content actually have to return? also it returns nothing for the second page
-    content = root.xpath('//article[@class="article"]//p[@class="Body"]/text()')
+    content = root.xpath('//article[@class="article"]//p/text()')
 
     return json.dumps({"title": title,
                        "subtitle": subtitle,
@@ -50,11 +49,15 @@ def overstock_with_xpath(html_to_extract):
     for i, item in enumerate(contents):
         contents[i] = item.replace('\n', '')
 
-    return json.dumps({"titles": titles,
-                       "list_price": list_prices,
-                       "price": prices,
-                       "saving": savings,
-                       "saving_percent": saving_percent,
-                       "content": contents
-                       }, ensure_ascii=False)
+    data = []
+    for i in range(len(titles)):
+        data.append({
+            "title": titles[i],
+            "list_price": list_prices[i],
+            "price": prices[i],
+            "saving": savings[i],
+            "saving_percent": saving_percent[i],
+            "content": contents[i]
+        })
+    return json.dumps(data, ensure_ascii=False)
 
