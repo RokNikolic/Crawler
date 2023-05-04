@@ -39,34 +39,34 @@ if __name__ == '__main__':
         for i, page in enumerate(rtv_pages):
             print("world")
             json = rtv_with_regex(page)
-            print(f"RTV page {i} with Regex: {json} \n")
+            print(f"\n\nRTV page {i} with Regex: {json} \n")
 
         for i, page in enumerate(overstock_pages):
             json = overstock_with_regex(page)
-            print(f"Overstock page {i} with Regex: {json} \n")
+            print(f"\n\nOverstock page {i} with Regex: {json} \n")
 
         for i, page in enumerate(nepremicnine_pages):
             json = nepremicnine_with_regex(page)
-            print(f"Nepremicnine page {i} with Regex: {json} \n")
+            print(f"\n\nNepremicnine page {i} with Regex: {json} \n")
 
     elif args.method in ["B", "b"]:
         for i, page in enumerate(rtv_pages):
             json = rtv_with_xpath(page)
-            print(f"RTV page {i} with XPath: {json} \n")
+            print(f"\n\nRTV page {i} with XPath: {json} \n")
 
         for i, page in enumerate(overstock_pages):
             json = overstock_with_xpath(page)
-            print(f"Overstock page {i} with XPath: {json} \n")
+            print(f"\n\nOverstock page {i} with XPath: {json} \n")
 
         for i, page in enumerate(nepremicnine_pages):
             json = nepremicnine_with_xpath(page)
-            print(f"Nepremicnine page {i} with XPath: {json} \n")   
+            print(f"\n\nNepremicnine page {i} with XPath: {json} \n")   
 
     elif args.method in ["C", "c"]:
         create_site_wrapper(overstock_pages, "overstock")
-        print(f"Overstock page with RoadRunner \n")
+        print(f"\n\nOverstock page with RoadRunner \n")
         create_site_wrapper(rtv_pages, "rtvslo")
-        print(f"RTV page with RoadRunner \n")
+        print(f"\n\nRTV page with RoadRunner \n")
 
     else:
         print("Bad argument, this program only excepts the following arguments: \n"

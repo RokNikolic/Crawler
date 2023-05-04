@@ -24,7 +24,7 @@ def rtv_with_xpath(html_to_extract):
                        "published_time": published_time,
                        "lead": lead,
                        "content": content
-                       }, ensure_ascii=False)
+                       }, ensure_ascii=False, indent=2)
 
 
 def overstock_with_xpath(html_to_extract):
@@ -59,7 +59,7 @@ def overstock_with_xpath(html_to_extract):
             "saving_percent": saving_percent[i],
             "content": contents[i]
         })
-    return json.dumps(data, ensure_ascii=False)
+    return json.dumps(data, ensure_ascii=False, indent=2)
 
 
 def nepremicnine_with_xpath(html_to_extract):
@@ -87,4 +87,4 @@ def nepremicnine_with_xpath(html_to_extract):
             "image_url": image_url[i] if "/images" not in image_url[i] else None
         })
 
-    return data
+    return json.dumps(data, ensure_ascii=False, indent=2)
