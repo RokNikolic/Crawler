@@ -1,6 +1,6 @@
 import argparse
 import os
-from Regex import rtv_with_regex, overstock_with_regex
+from Regex import rtv_with_regex, overstock_with_regex, nepremicnine_with_regex
 from XPath import rtv_with_xpath, overstock_with_xpath
 from RoadRunner import create_site_wrapper
 
@@ -30,6 +30,16 @@ for file in os.listdir(path_to_overstock):
             html = f.read()
             list_of_overstock_pages.append(html)
 
+# Get Nepremicnine pages
+list_of_nepr_pages = []
+path_to_nepr = os.path.join(os.getcwd(), '..', 'input-extraction', 'nepremicnine')
+
+for file in os.listdir(path_to_nepr):
+    if file.endswith(".html"):
+        with open(os.path.join(path_to_nepr, f'{file}'), "r", encoding='utf-8') as f:
+            html = f.read()
+            list_of_nepr_pages.append(html)
+
 
 if __name__ == '__main__':
     if args.method == "A" or args.method == "a":
@@ -40,6 +50,10 @@ if __name__ == '__main__':
         for i, page in enumerate(list_of_overstock_pages):
             json = overstock_with_regex(page)
             print(f"Overstock page {i} with Regex: {json} \n")
+
+        for i, page in enumerate(list_of_overstock_pages):
+            json = nepremicnine_with_regex(page)
+            print(f"Nepremicnine page {i} with Regex: {json} \n")
 
     elif args.method == "B" or args.method == "b":
         for i, page in enumerate(list_of_rtv_pages):

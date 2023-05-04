@@ -69,3 +69,40 @@ def overstock_with_regex(html_to_extract):
             "content": contents[i]
         })
     return json.dumps(data, ensure_ascii=False)
+
+
+def nepremicnine_with_regex(html_to_extract):
+    html_to_extract = re.sub('\n', ' ', html_to_extract)
+
+    print(html_to_extract)
+
+    location = re.findall(r'<h2.*?<span class="title".*?>(.*?)[<|,]', html_to_extract)
+
+    listing_type = re.findall(r'<span class="posr.*?>(.+?):', html_to_extract)
+
+    estate_type = re.findall(r'<span class="vrsta.*?>(.+?)<', html_to_extract)
+
+    year = re.findall(r'<span class="atribut leto.*?<strong>(.+?)<', html_to_extract)
+
+    price = re.findall(r'<span class="cena.*?>(.+?)\s', html_to_extract)
+
+    area = re.findall(r'<span class="velikost.*?><span></span>(.+?)\s', html_to_extract)
+
+    description = re.findall(r'<div class="kratek.*?itemprop="description.*?>(.+?)<', html_to_extract)
+
+    image_url = re.findall(r'<a.*?data-src="(.*?)"', html_to_extract)
+
+    data = []
+    for i in range(len(location)):
+        data.append({
+            "location": location[i],
+            "listing_type": listing_type[i],
+            "year": int(year[i]),
+            "price": float(price[i].replace(".", "").replace(",", ".")),
+            "area": float(area[i].replace(".", "").replace(",", ".")),
+            "description": description[i],
+            "image_url": image_url[i] if "/images" not in image_url[i] else None
+        })
+
+    return data
+
