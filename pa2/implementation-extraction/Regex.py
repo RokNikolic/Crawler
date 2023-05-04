@@ -30,7 +30,7 @@ def rtv_with_regex(html_to_extract):
     if lead_match:
         lead = lead_match.group(1)
 
-    content = re.findall(r'<p class="Body"></p>(.+?)<p></p>', html_to_extract, re.DOTALL)
+    content = re.findall(r'<article class="article">.*?<p[^>]*>(.*?)</p>[\s\n\t]*(?:\t|<figure class="mceNonEditable)', html_to_extract, re.DOTALL)
     for i, item in enumerate(content):
         content[i] = re.sub(r'<.*?>', '', item.strip())
 

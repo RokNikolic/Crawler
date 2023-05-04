@@ -371,17 +371,12 @@ def filter_webpage(webpage):
     return webpage
 
 
-def create_site_wrapper(site="sample"):
-    # Create wrapper for all pages in input-extraction
-    pages = [item for item in os.listdir(f'../input-extraction/{site}/') if item.endswith(".html")]
-
+def create_site_wrapper(pages, site="rtvslo"):
     # First read all pages and convert to BeautifulSoup objects
     bs_objects = []
     for page in pages:
         try:
-            with open(rf"..\input-extraction\{site}\{page}", "r", encoding="utf-8") as f:
-                # Add BeautifulSoup object to list, converted to non-broken LXML (tags are closed)
-                bs_objects.append(BeautifulSoup(f.read(), "lxml"))
+            bs_objects.append(BeautifulSoup(page, "lxml"))
         except Exception as e:
             print(f"Error while reading file {page}: {e}")
             exit(-1)
