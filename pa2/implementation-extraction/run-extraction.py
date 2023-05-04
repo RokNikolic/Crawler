@@ -1,7 +1,7 @@
 import argparse
 import os
 from Regex import rtv_with_regex, overstock_with_regex, nepremicnine_with_regex
-from XPath import rtv_with_xpath, overstock_with_xpath
+from XPath import rtv_with_xpath, overstock_with_xpath, nepremicnine_with_xpath
 from RoadRunner import create_site_wrapper
 
 
@@ -57,6 +57,10 @@ if __name__ == '__main__':
         for i, page in enumerate(overstock_pages):
             json = overstock_with_xpath(page)
             print(f"Overstock page {i} with XPath: {json} \n")
+
+        for i, page in enumerate(nepremicnine_pages):
+            json = nepremicnine_with_xpath(page)
+            print(f"Nepremicnine page {i} with XPath: {json} \n")   
 
     elif args.method in ["C", "c"]:
         create_site_wrapper(overstock_pages, "overstock")

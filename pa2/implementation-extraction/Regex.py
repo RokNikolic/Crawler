@@ -97,6 +97,7 @@ def nepremicnine_with_regex(html_to_extract):
         data.append({
             "location": location[i],
             "listing_type": listing_type[i],
+            "estate_type": estate_type[i],
             "year": int(year[i]),
             "price": float(price[i].replace(".", "").replace(",", ".")),
             "area": float(area[i].replace(".", "").replace(",", ".")),

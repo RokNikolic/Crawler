@@ -61,3 +61,30 @@ def overstock_with_xpath(html_to_extract):
         })
     return json.dumps(data, ensure_ascii=False)
 
+
+def nepremicnine_with_xpath(html_to_extract):
+    root = etree.HTML(html_to_extract)
+
+    location = root.xpath('//h2//span[@class="title"]/text()')
+    listing_type = root.xpath('//span[contains(@class, "posr")]/text()')
+    estate_type = root.xpath('//span[contains(@class, "vrsta")]/text()')
+    year = root.xpath('//span[contains(@class, "atribut leto")]/strong/text()')
+    price = root.xpath('//span[contains(@class, "cena")]/text()')
+    area = root.xpath('//span[contains(@class, "velikost")]/text()')
+    description = root.xpath('//div[contains(@class, "kratek") and contains(@itemprop, "description")]/text()')
+    image_url = root.xpath('//a//img[1][@data-src]/@data-src')
+
+    data = []
+    for i in range(len(location)):
+        data.append({
+            "location": location[i].rsplit(",")[0],
+            "listing_type": listing_type[i],
+            "estate_type": estate_type[i],
+            "year": int(year[i]),
+            "price": float(price[i].rsplit(" ")[0].replace(".", "").replace(",", ".")),
+            "area": float(area[i].rsplit(" ")[0].replace(".", "").replace(",", ".")),
+            "description": description[i],
+            "image_url": image_url[i] if "/images" not in image_url[i] else None
+        })
+
+    return data
