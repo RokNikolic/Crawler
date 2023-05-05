@@ -65,8 +65,10 @@ if __name__ == '__main__':
     elif args.method in ["C", "c"]:
         create_site_wrapper(overstock_pages, "overstock")
         print(f"\n\nOverstock page with RoadRunner \n")
-        create_site_wrapper(rtv_pages, "rtvslo")
+        create_site_wrapper(rtv_pages, "rtv")
         print(f"\n\nRTV page with RoadRunner \n")
+        create_site_wrapper(nepremicnine_pages, "nepremicnine")
+        print(f"\n\nNepremicnine page with RoadRunner \n")
 
     else:
         print("Bad argument, this program only excepts the following arguments: \n"
