@@ -1,0 +1,1 @@
+# Here we must implement a basic python search with naive approach by going over all the files and searching for the query.
