@@ -40,7 +40,7 @@ def rtv_with_regex(html_to_extract):
                        "published_time": published_time,
                        "lead": lead,
                        "content": content
-                       }, ensure_ascii=False)
+                       }, ensure_ascii=False, indent=2)
 
 
 def overstock_with_regex(html_to_extract):
@@ -68,13 +68,11 @@ def overstock_with_regex(html_to_extract):
             "saving_percent": saving_percent[i],
             "content": contents[i]
         })
-    return json.dumps(data, ensure_ascii=False)
+    return json.dumps(data, ensure_ascii=False, indent=2)
 
 
 def nepremicnine_with_regex(html_to_extract):
     html_to_extract = re.sub('\n', ' ', html_to_extract)
-
-    print(html_to_extract)
 
     location = re.findall(r'<h2.*?<span class="title".*?>(.*?)[<|,]', html_to_extract)
 
@@ -97,6 +95,7 @@ def nepremicnine_with_regex(html_to_extract):
         data.append({
             "location": location[i],
             "listing_type": listing_type[i],
+            "estate_type": estate_type[i],
             "year": int(year[i]),
             "price": float(price[i].replace(".", "").replace(",", ".")),
             "area": float(area[i].replace(".", "").replace(",", ".")),
@@ -104,5 +103,5 @@ def nepremicnine_with_regex(html_to_extract):
             "image_url": image_url[i] if "/images" not in image_url[i] else None
         })
 
-    return data
+    return json.dumps(data, ensure_ascii=False, indent=2)
 
