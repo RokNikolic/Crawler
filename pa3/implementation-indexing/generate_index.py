@@ -1,6 +1,8 @@
 import sqlite3
 import os
 
+from preprocess_text import preprocess_text
+
 if __name__ == "__main__":
     # Check if sqlite3 database exists
     if os.path.exists('index.db'):
@@ -34,9 +36,9 @@ if __name__ == "__main__":
             # Open the file
             with open(os.path.join(root, file), 'r') as f:
                 # Read the file
-                data = f.read()
+                raw_text = f.read()
                 # Split the file into words
-                words = data.split()
+                words = preprocess_text(raw_text)
                 # Get the unique words
                 unique_words = set(words)
                 # For each unique word, get the frequency and indexes
